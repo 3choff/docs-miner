@@ -2,6 +2,8 @@
 
 This extension allows you to generate markdown documentation from web pages using the Jina AI Reader API.
 
+If you find FastWhisperAPI useful, please consider leaving a star ⭐ or [donate](https://ko-fi.com/3choff).
+
 ## Features
 
 - Generate markdown documentation from any web URL
@@ -34,13 +36,24 @@ The markdown file will be automatically created in your current workspace and op
 
 ## Installation
 
-### VS Code Marketplace
+Choose one of the following installation methods:
+
+### 1. VS Code Marketplace
 1. Open VS Code
 2. Go to the Extensions view (Ctrl+Shift+X)
 3. Search for "Docs Miner"
 4. Click Install
 
-### Building from Source
+### 2. GitHub Release
+1. Go to the [latest release](https://github.com/3choff/docs-miner/releases/latest)
+2. Download the `docs-miner-1.0.0.vsix` file
+3. In VS Code:
+   - Go to Extensions view (Ctrl+Shift+X)
+   - Click '...' menu (top-right)
+   - Select 'Install from VSIX...'
+   - Choose the downloaded file
+
+### 3. Building from Source
 1. Clone the repository: `git clone https://github.com/3choff/docs-miner`
 2. Run `npm install` in the terminal
 3. Run `npm run compile` to build the extension
