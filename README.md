@@ -2,7 +2,7 @@
 
 This extension allows you to generate markdown documentation from web pages using the Jina AI Reader API.
 
-If you find FastWhisperAPI useful, please consider leaving a star ⭐ or [donate](https://ko-fi.com/3choff).
+If you find Docs Miner useful, please consider leaving a star ⭐ or [donate](https://ko-fi.com/3choff).
 
 ## Features
 
