@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="${stylesUri}">
+</head>
+<body>
+    <input type="text" id="urlInput" placeholder="Enter URL to scrape (e.g., https://example.com)" />
+    <div class="depth-control">
+        <input type="range" id="depthSlider" min="1" max="5" value="1" />
+        <div class="depth-value">Depth: <span id="depthValue">1</span></div>
+        <div id="depthDescription">Single page only</div>
+    </div>
+    <div class="controls">
+        <button id="startButton">Start Crawling</button>
+        <button id="stopButton">Stop Crawling</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="settings">
+        <label class="checkbox-container">
+            <input type="checkbox" id="autoOpenFile" />
+            <span class="checkbox-label">Automatically open generated file</span>
+        </label>
+    </div>
+
+    <script src="${scriptUri}"></script>
+</body>
+</html>

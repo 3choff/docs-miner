@@ -1,0 +1,56 @@
+{
+  "name": "docs-miner",
+  "displayName": "Docs Miner",
+  "description": "Generate markdown documentation from web pages",
+  "version": "1.0.0",
+  "publisher": "3choff",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/3choff/docs-miner"
+  },
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:docsMinerView"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "docs-miner-sidebar",
+          "title": "Docs Miner",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "docs-miner-sidebar": [
+        {
+          "id": "docsMinerView",
+          "name": "Docs Miner",
+          "type": "webview"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile"
+  },
+  "dependencies": {
+    "axios": "^1.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^16.11.7",
+    "@types/vscode": "^1.95.0",
+    "typescript": "^4.5.5"
+  }
+}
