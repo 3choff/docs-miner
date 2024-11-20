@@ -7,14 +7,15 @@ const startButton = document.getElementById('startButton');
 const stopButton = document.getElementById('stopButton');
 const status = document.getElementById('status');
 const autoOpenFile = document.getElementById('autoOpenFile');
+const outputFolder = document.getElementById('outputFolder');
 
 function updateDepthDescription(depth) {
     const descriptions = {
-        1: 'Single page only',
-        2: 'Page and direct links',
-        3: 'Medium depth crawl',
-        4: 'Deep crawl',
-        5: 'Very deep crawl'
+        1: 'Current page only',
+        2: 'Current page + one level down',
+        3: 'Current page + two levels down',
+        4: 'Current page + three levels down',
+        5: 'Current page + four levels down'
     };
     depthDescription.textContent = descriptions[depth] || '';
 }
@@ -49,7 +50,8 @@ startButton.addEventListener('click', () => {
     vscode.postMessage({
         type: 'startCrawl',
         url: url,
-        depth: parseInt(depthSlider.value)
+        depth: parseInt(depthSlider.value),
+        outputFolder: outputFolder.value.trim()
     });
 });
 

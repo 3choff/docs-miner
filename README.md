@@ -7,7 +7,8 @@ If you find Docs Miner useful, please consider leaving a star ⭐ or [donate](ht
 ## Features
 
 - Generate markdown documentation from any web URL
-- Control crawling depth for documentation generation
+- Smart crawling that follows subdirectory structure from the initial URL
+- Configurable crawling depth with precise level control
 - Real-time progress tracking
 - Stop crawling at any time
 - Automatically saves the markdown file in your current workspace
@@ -17,21 +18,22 @@ If you find Docs Miner useful, please consider leaving a star ⭐ or [donate](ht
 
 1. Open the Docs Miner sidebar (look for the Docs Miner icon in the Activity Bar)
 2. Enter the URL you want to generate documentation from
-3. Adjust the crawling depth using the slider:
-   - Depth 1: Single page only
-   - Depth 2: Page and direct links
-   - Depth 3: Medium depth crawl
-   - Depth 4: Deep crawl
-   - Depth 5: Very deep crawl
-4. Click "Start Crawling" to begin
-5. Monitor the progress in real-time
-6. Use the "Stop Crawling" button if you want to end the process early
+3. Specify the output folder for the generated documentation
+4. Adjust the crawling depth using the slider:
+   - Depth 1: Current page only
+   - Depth 2: Current page + one level down
+   - Depth 3: Current page + two levels down
+   - Depth 4: Current page + three levels down
+   - Depth 5: Current page + four levels down
+5. Click "Start Crawling" to begin
+6. Monitor the progress in real-time
+7. Use the "Stop Crawling" button if you want to end the process early
 
-The markdown file will be automatically created in your current workspace and opened for viewing.
+The markdown file will be automatically created in your specified output folder and opened for viewing.
 
 ## Requirements
 
-- VSCode 1.95.0 or higher
+- VSCode 1.80.0 or higher
 - Active internet connection
 
 ## Installation
@@ -69,6 +71,7 @@ Choose one of the following installation methods:
 
 ## Technical Notes
 - The extension uses the Jina AI Reader API for markdown conversion
+- Crawling is restricted to subdirectories of the initial URL to ensure focused documentation
 - Output quality and content extraction depends on Jina AI's capabilities and limitations
 - Rate limiting: 1 second delay between requests to prevent overloading
 - May be affected by website's robots.txt and rate limiting policies

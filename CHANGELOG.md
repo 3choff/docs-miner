@@ -1,5 +1,14 @@
 # Change Log
 
+## [1.0.3] - 2024-11-20
+
+### Changed
+- Improved crawling logic to follow subdirectory structure from initial URL
+- Updated documentation to reflect new crawling behavior
+
+### Fixed
+- Version compatibility issue with VS Code types
+
 ## [1.0.0] - 2024-11-19
 
 ### Added

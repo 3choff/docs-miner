@@ -1,5 +1,5 @@
 :root {
-    --background-color: #1e1e1e;
+    --background-color: #252526;
     --text-color: #e0e0e0;
     --input-background: #2d2d2d;
     --input-border: #3d3d3d;
@@ -184,4 +184,16 @@ input[type="checkbox"]:checked::after {
     border: solid white;
     border-width: 0 2px 2px 0;
     transform: rotate(45deg);
+}
+
+.folder-input {
+    margin-top: 10px;
+}
+
+.folder-input input {
+    width: 100%;
+    padding: 5px;
+    border: 1px solid var(--vscode-input-border);
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
 }

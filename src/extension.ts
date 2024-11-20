@@ -41,6 +41,16 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
                     const workspaceFolder = workspaceFolders[0].uri.fsPath;
                     const urlParts = new URL(data.url);
                     
+                    // Create output folder path if specified
+                    let outputPath = workspaceFolder;
+                    if (data.outputFolder) {
+                        outputPath = path.join(workspaceFolder, data.outputFolder);
+                        // Create the folder if it doesn't exist
+                        if (!fs.existsSync(outputPath)) {
+                            await fs.promises.mkdir(outputPath, { recursive: true });
+                        }
+                    }
+                    
                     // Create a filename from the full URL
                     let urlPath = urlParts.pathname.replace(/\//g, '-');
                     urlPath = urlPath.replace(/^-|-$/g, ''); // Remove leading/trailing dashes
@@ -57,7 +67,7 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
                         .replace(/-+/g, '-') // Replace multiple dashes with single dash
                         .substring(0, 255); // Limit filename length
                     
-                    this._outputFile = path.join(workspaceFolder, fileName);
+                    this._outputFile = path.join(outputPath, fileName);
                     
                     try {
                         await this.crawlAndScrape(data.url, data.depth, webviewView.webview);
@@ -103,15 +113,34 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
         const plannedVisits = new Set([startUrl]);
         let currentPage = 0;
 
-        // Initialize the output file with a header
-        const header = `# Documentation from ${startUrl}\nCrawl depth: ${depth}\nGenerated on: ${new Date().toISOString()}\n\n---\n\n`;
-        await this.saveToFile(header, false);
+        // Parse the initial URL for reference
+        const baseUrlObj = new URL(startUrl);
+        const basePathParts = baseUrlObj.pathname.split('/').filter(Boolean);
 
-        const isWithinDocs = (url: string, baseUrl: string) => {
+        const isWithinDocs = (url: string): boolean => {
             try {
-                const baseUrlObj = new URL(baseUrl);
                 const urlObj = new URL(url);
-                return urlObj.hostname === baseUrlObj.hostname;
+                
+                // Check if same hostname
+                if (urlObj.hostname !== baseUrlObj.hostname) {
+                    return false;
+                }
+
+                // Get path parts for comparison
+                const urlPathParts = urlObj.pathname.split('/').filter(Boolean);
+                
+                // Check if the URL path starts with the base path
+                for (let i = 0; i < basePathParts.length; i++) {
+                    if (urlPathParts[i] !== basePathParts[i]) {
+                        return false;
+                    }
+                }
+
+                // Calculate the depth difference
+                const depthDifference = urlPathParts.length - basePathParts.length;
+                
+                // URL must not go above the base path and must be within allowed depth
+                return depthDifference >= 0 && depthDifference < depth;
             } catch {
                 return false;
             }
@@ -128,30 +157,27 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
                 const html = response.data;
                 const links: string[] = [];
                 
-                // Extract both relative and absolute URLs
                 const hrefRegex = /href=["']([^"']+)["']/g;
                 let match;
                 
                 while ((match = hrefRegex.exec(html)) !== null) {
                     try {
                         const href = match[1];
-                        // Skip anchors, javascript links, and file downloads
                         if (href.startsWith('#') || 
                             href.startsWith('javascript:') || 
                             href.match(/\.(pdf|zip|rar|exe|dmg|pkg|deb|rpm)$/i)) {
                             continue;
                         }
                         const fullUrl = new URL(href, url).href;
-                        if (fullUrl.startsWith('http') && isWithinDocs(fullUrl, startUrl)) {
+                        if (fullUrl.startsWith('http') && isWithinDocs(fullUrl)) {
                             links.push(fullUrl);
                         }
                     } catch (e) {
-                        // Skip invalid URLs
                         console.error('Invalid URL:', e);
                     }
                 }
                 
-                return [...new Set(links)]; // Remove duplicates
+                return [...new Set(links)];
             } catch (error) {
                 console.error(`Error fetching links from ${url}:`, error);
                 return [];
@@ -168,11 +194,7 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
             const currentUrl = current.url;
             const currentDepth = current.depth;
 
-            if (visited.has(currentUrl)) {
-                continue;
-            }
-
-            if (currentDepth >= depth) {
+            if (visited.has(currentUrl) || currentDepth >= depth) {
                 continue;
             }
 
@@ -193,12 +215,12 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
                     }
                 });
 
-                // Save this page's content immediately
+                // Save this page's content
                 const pageContent = `\n\n# ${currentUrl}\n\n${markdownResponse.data}\n\n---\n`;
                 await this.saveToFile(pageContent, true);
 
-                // Then, if we haven't reached max depth, get links
-                if (currentDepth < depth - 1) { 
+                // Only get links if we haven't reached max depth
+                if (currentDepth < depth - 1) {  // Important change here
                     webview.postMessage({
                         type: 'status',
                         message: `Finding links in ${currentUrl}...`
@@ -221,9 +243,7 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
                     });
                 }
 
-                // Add a small delay between requests
                 await new Promise(resolve => setTimeout(resolve, 1000));
-
             } catch (error) {
                 console.error(`Error processing ${currentUrl}:`, error);
                 // Save error information to the file
