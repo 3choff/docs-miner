@@ -1,12 +1,15 @@
 # Docs Miner VSCode Extension
 
-This extension allows you to generate markdown documentation from web pages using the Jina AI Reader API.
+This extension allows you to generate markdown documentation from web pages using either the Jina AI Reader API or a browser-based method.
 
-If you find Docs Miner useful, please consider leaving a star ⭐ or [donate](https://ko-fi.com/3choff).
+If you find Docs Miner useful, please consider leaving a star ⭐ on github repository or buying me a [coffee](https://ko-fi.com/3choff) to keep me motivated to work on this project.
 
 ## Features
 
 - Generate markdown documentation from any web URL
+- Two scraping methods:
+  - API Method (Faster but may fail)
+  - Browser Method (Slower but more reliable)
 - Smart crawling that follows subdirectory structure from the initial URL
 - Configurable crawling depth with precise level control
 - Real-time progress tracking
@@ -48,7 +51,7 @@ Choose one of the following installation methods:
 
 ### 2. GitHub Release
 1. Go to the [latest release](https://github.com/3choff/docs-miner/releases/latest)
-2. Download the `docs-miner-1.0.0.vsix` file
+2. Download the latest `docs-miner-x.x.x.vsix` file
 3. In VS Code:
    - Go to Extensions view (Ctrl+Shift+X)
    - Click '...' menu (top-right)
@@ -70,9 +73,10 @@ Choose one of the following installation methods:
    - Choose the generated .vsix file
 
 ## Technical Notes
-- The extension uses the Jina AI Reader API for markdown conversion
+- The extension offers two methods for content extraction:
+  - Jina AI Reader API: Fast but may fail on some websites
+  - Browser-based scraping: More reliable but slower, handles JavaScript-heavy sites
 - Crawling is restricted to subdirectories of the initial URL to ensure focused documentation
-- Output quality and content extraction depends on Jina AI's capabilities and limitations
 - Rate limiting: 1 second delay between requests to prevent overloading
 - May be affected by website's robots.txt and rate limiting policies
 - Skips non-documentation links (PDFs, executables, etc.)

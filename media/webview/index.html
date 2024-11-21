@@ -7,6 +7,12 @@
 </head>
 <body>
     <input type="text" id="urlInput" placeholder="Enter URL to scrape (e.g., https://example.com)" />
+    <div class="crawler-method">
+        <select id="crawlerMethod">
+            <option value="api">API Method (Faster but may fail on some sites)</option>
+            <option value="browser">Browser Method (Slower but more reliable)</option>
+        </select>
+    </div>
     <div class="depth-control">
         <input type="range" id="depthSlider" min="1" max="5" value="1" />
         <div class="depth-value">Depth: <span id="depthValue">1</span></div>

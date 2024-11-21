@@ -73,6 +73,23 @@ input[type="range"]::-webkit-slider-thumb {
 input[type="range"]:focus {
     outline: none;
 }
+.crawler-method {
+    margin: 10px 0;
+}
+
+.crawler-method select {
+    width: 100%;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--input-border);
+    background: var(--input-background);
+    color: var(--text-color);
+    outline: none;
+    transition: border-color 0.2s;
+}
+.crawler-method select:focus {
+    border-color: var(--input-focus-border);
+}
 
 .depth-value {
     text-align: center;

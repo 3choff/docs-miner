@@ -8,6 +8,7 @@ const stopButton = document.getElementById('stopButton');
 const status = document.getElementById('status');
 const autoOpenFile = document.getElementById('autoOpenFile');
 const outputFolder = document.getElementById('outputFolder');
+const crawlerMethod = document.getElementById('crawlerMethod');
 
 function updateDepthDescription(depth) {
     const descriptions = {
@@ -51,7 +52,8 @@ startButton.addEventListener('click', () => {
         type: 'startCrawl',
         url: url,
         depth: parseInt(depthSlider.value),
-        outputFolder: outputFolder.value.trim()
+        outputFolder: outputFolder.value.trim(),
+        method: crawlerMethod.value
     });
 });
 

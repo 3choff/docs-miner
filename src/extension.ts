@@ -2,6 +2,8 @@ import * as vscode from 'vscode';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
+import PCR from 'puppeteer-chromium-resolver';
+import TurndownService from 'turndown';
 
 class DocsMinerViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'docsMinerView';
@@ -70,7 +72,7 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
                     this._outputFile = path.join(outputPath, fileName);
                     
                     try {
-                        await this.crawlAndScrape(data.url, data.depth, webviewView.webview);
+                        await this.crawlAndScrape(data.url, data.depth, webviewView.webview, data.method);
                     } catch (error) {
                         vscode.window.showErrorMessage(`Error during crawling: ${error}`);
                     }
@@ -107,7 +109,181 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private async crawlAndScrape(startUrl: string, depth: number, webview: vscode.Webview): Promise<void> {
+    private async getContentWithPuppeteer(url: string): Promise<string> {
+        const stats = await PCR();
+        const browser = await stats.puppeteer.launch({
+            headless: 'new',
+            executablePath: stats.executablePath
+        });
+        
+        try {
+            const page = await browser.newPage();
+            await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+            
+            await page.goto(url, { waitUntil: 'networkidle0' });
+            
+            // Get the page title early
+            const pageTitle = await page.title();
+            
+            // Process the page content
+            await page.evaluate((baseUrl) => {
+                // Helper function to check if an element is part of documentation
+                const isDocumentationBlock = (element: Element): boolean => {
+                    const docContainers = [
+                        '.documentation', '.docs-content', '.markdown-body', 
+                        'article', 'main', '.content', '.doc-content',
+                        '[role="main"]', '.documentation-content'
+                    ];
+                    return docContainers.some(selector => 
+                        element.closest(selector) !== null
+                    );
+                };
+
+                // Convert all relative URLs to absolute
+                const links = document.querySelectorAll('a[href]');
+                links.forEach((el) => {
+                    const href = el.getAttribute('href');
+                    if (href) {
+                        if (href.startsWith('/')) {
+                            el.setAttribute('href', new URL(href, baseUrl).href);
+                        } else if (!href.startsWith('http') && !href.startsWith('mailto:') && !href.startsWith('#')) {
+                            el.setAttribute('href', new URL(href, baseUrl).href);
+                        }
+                    }
+                });
+
+                // Handle scripts based on context
+                const scripts = document.getElementsByTagName('script');
+                Array.from(scripts).forEach(script => {
+                    const isUtilityScript = (
+                        script.textContent?.includes('!function') ||
+                        script.textContent?.includes('window.__CF') ||
+                        script.textContent?.includes('intercom') ||
+                        script.textContent?.includes('analytics') ||
+                        script.textContent?.includes('gtag') ||
+                        script.textContent?.includes('tracking') ||
+                        script.getAttribute('src')?.includes('analytics') ||
+                        script.getAttribute('src')?.includes('tracking')
+                    );
+
+                    // Remove if it's a utility script or not in documentation block
+                    if (isUtilityScript || !isDocumentationBlock(script)) {
+                        script.parentNode?.removeChild(script);
+                    }
+                });
+
+                // Remove non-documentation UI elements
+                const uiElements = document.querySelectorAll(
+                    'style, ' +
+                    '[class*="intercom-"], [class*="animation-"], ' +
+                    '[id*="tracking"], [id*="analytics"], ' +
+                    '[class*="cookie"], [class*="popup"], ' +
+                    'nav:not(.doc-nav), footer:not(.doc-footer)'
+                );
+                uiElements.forEach(el => {
+                    if (!isDocumentationBlock(el)) {
+                        el.parentNode?.removeChild(el);
+                    }
+                });
+            }, url);
+            
+            const content = await page.content();
+            
+            // Convert HTML to Markdown
+            const turndownService = new TurndownService({
+                headingStyle: 'atx',
+                codeBlockStyle: 'fenced'
+            });
+            
+            // Additional Turndown rules for code blocks
+            turndownService.addRule('preserveDocumentationCode', {
+                filter: (node: HTMLElement): boolean => {
+                    // Keep code blocks that are likely documentation examples
+                    const isCodeBlock = node.nodeName === 'PRE' || 
+                                      node.nodeName === 'CODE' ||
+                                      node.classList.contains('highlight') ||
+                                      node.classList.contains('code-example');
+                    
+                    const isUtilityScript = node.textContent?.includes('!function') ||
+                                          node.textContent?.includes('window.__CF') ||
+                                          node.textContent?.includes('intercom') ||
+                                          node.textContent?.includes('analytics') ||
+                                          node.textContent?.includes('gtag') ||
+                                          node.textContent?.includes('tracking');
+                    
+                    return isCodeBlock && !isUtilityScript;
+                },
+                // replacement: (content: string): string => {
+                //     // Preserve code blocks with appropriate formatting
+                //     return '\n```\n' + content + '\n```\n';
+                // }
+                replacement: function(content: string, node): string {
+                    // Type assertion since we know this will be an HTMLElement from our filter
+                    const element = node as HTMLElement;
+                    
+                    // Get the language if specified
+                    const language = element.getAttribute('data-language') || 
+                                    element.getAttribute('class')?.match(/language-(\w+)/)?.[1] ||
+                                    '';
+                                    
+                    // Clean up the content
+                    const cleanContent = content
+                        .trim()                         // Remove extra whitespace
+                        .replace(/^\s+|\s+$/gm, '')    // Remove leading/trailing spaces per line
+                        .replace(/```/g, '′′′');       // Replace any existing backticks to prevent nesting issues
+            
+                    // Format the code block properly
+                    return `\n\n\`\`\`${language}\n${cleanContent}\n\`\`\`\n\n`;
+                }
+            });
+            
+            const markdown = turndownService.turndown(content);
+            
+            // Format the content with metadata to match API output
+            const formattedContent = [
+                `Title: ${pageTitle}`,
+                `URL Source: ${url}`,
+                'Markdown Content:',
+                markdown
+                    .replace(/@keyframes[\s\S]*?}/g, '')      // Remove @keyframes blocks
+                    .replace(/\.intercom[\s\S]*?}/g, '')      // Remove intercom-specific CSS
+                    .replace(/\.tracking[\s\S]*?}/g, '')      // Remove tracking-related CSS
+                    .replace(/\n{3,}/g, '\n\n')               // Remove excessive newlines
+                    .trim()
+            ].join('\n\n');
+            
+            return formattedContent;
+            
+        } finally {
+            await browser.close();
+        }
+    }
+
+    private async getPageContent(url: string, method: string): Promise<string> {
+        if (method === 'api') {
+            try {
+                const markdownResponse = await axios.get(`https://r.jina.ai/${url}`, {
+                    timeout: 30000,
+                    headers: {
+                        'Accept': 'text/markdown'
+                    }
+                });
+                return markdownResponse.data;
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                throw new Error(`API method failed: ${errorMessage}`);
+            }
+        } else {
+            try {
+                return await this.getContentWithPuppeteer(url);
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                throw new Error(`Browser method failed: ${errorMessage}`);
+            }
+        }
+    }
+
+    private async crawlAndScrape(startUrl: string, depth: number, webview: vscode.Webview, method: string): Promise<void> {
         const visited = new Set<string>();
         const toVisit: Array<{url: string; depth: number}> = [{url: startUrl, depth: 0}];
         const plannedVisits = new Set([startUrl]);
@@ -207,17 +383,12 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
             });
 
             try {
-                // Get the markdown content
-                const markdownResponse = await axios.get(`https://r.jina.ai/${currentUrl}`, {
-                    timeout: 30000,
-                    headers: {
-                        'Accept': 'text/markdown'
-                    }
-                });
-
+                // Get the markdown content using selected method
+                const pageContent = await this.getPageContent(currentUrl, method);
+                
                 // Save this page's content
-                const pageContent = `\n\n# ${currentUrl}\n\n${markdownResponse.data}\n\n---\n`;
-                await this.saveToFile(pageContent, true);
+                const content = `\n\n# ${currentUrl}\n\n${pageContent}\n\n---\n`;
+                await this.saveToFile(content, true);
 
                 // Only get links if we haven't reached max depth
                 if (currentDepth < depth - 1) {  // Important change here
