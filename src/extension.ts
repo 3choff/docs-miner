@@ -81,7 +81,7 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
                     this._stopCrawling = true;
                     webviewView.webview.postMessage({
                         type: 'status',
-                        message: 'Stopping crawl... Please wait for current page to finish.'
+                        message: 'Stopping crawl... \nPlease wait for current page to finish.'
                     });
                     break;
                 case 'openFile':
@@ -120,7 +120,7 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
             const page = await browser.newPage();
             await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
             
-            await page.goto(url, { waitUntil: 'networkidle0' });
+            await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
             
             // Get the page title early
             const pageTitle = await page.title();
@@ -198,7 +198,6 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
             // Additional Turndown rules for code blocks
             turndownService.addRule('preserveDocumentationCode', {
                 filter: (node: HTMLElement): boolean => {
-                    // Keep code blocks that are likely documentation examples
                     const isCodeBlock = node.nodeName === 'PRE' || 
                                       node.nodeName === 'CODE' ||
                                       node.classList.contains('highlight') ||
@@ -213,37 +212,32 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
                     
                     return isCodeBlock && !isUtilityScript;
                 },
-                // replacement: (content: string): string => {
-                //     // Preserve code blocks with appropriate formatting
-                //     return '\n```\n' + content + '\n```\n';
-                // }
-                replacement: function(content: string, node): string {
-                    // Type assertion since we know this will be an HTMLElement from our filter
-                    const element = node as HTMLElement;
-                    
-                    // Get the language if specified
-                    const language = element.getAttribute('data-language') || 
-                                    element.getAttribute('class')?.match(/language-(\w+)/)?.[1] ||
-                                    '';
-                                    
-                    // Clean up the content
+
+                replacement: function(content: string, node): string {         
+                    // Preserve indentation and don't replace backticks
                     const cleanContent = content
-                        .trim()                         // Remove extra whitespace
-                        .replace(/^\s+|\s+$/gm, '')    // Remove leading/trailing spaces per line
-                        .replace(/```/g, '′′′');       // Replace any existing backticks to prevent nesting issues
-            
-                    // Format the code block properly
-                    return `\n\n\`\`\`${language}\n${cleanContent}\n\`\`\`\n\n`;
+                        .trim()
+                        // Remove CSS-like content
+                        .replace(/\[data-.*?\}+/gs, '')
+                        // remove leading and trailing whitespace                    
+                        // .replace(/^\s+|\s+$/gm, '')
+                        // remove line numbers
+                        .replace(/^\d+\s*$/gm, '')
+                        .replace(/```/g, '');
+
+                    const result = `\n\`\`\`${cleanContent ? '\n' + cleanContent : ''}\n\`\`\`\n`;
+                    return result;
                 }
+            
             });
             
             const markdown = turndownService.turndown(content);
             
             // Format the content with metadata to match API output
             const formattedContent = [
-                `Title: ${pageTitle}`,
-                `URL Source: ${url}`,
-                'Markdown Content:',
+                `## Title: ${pageTitle}`,
+                // `URL Source: ${url}`,
+                // 'Markdown Content:',
                 markdown
                     .replace(/@keyframes[\s\S]*?}/g, '')      // Remove @keyframes blocks
                     .replace(/\.intercom[\s\S]*?}/g, '')      // Remove intercom-specific CSS
@@ -283,170 +277,369 @@ class DocsMinerViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
+    private parseGitHubUrl(url: string) {
+        const urlParts = new URL(url);
+        const pathParts = urlParts.pathname.split('/').filter(Boolean);
+        return {
+            owner: pathParts[0],
+            repo: pathParts[1],
+            type: pathParts[2], // 'tree' or 'blob'
+            branch: pathParts[3] || 'main',
+            basePath: pathParts.slice(4).join('/'),
+            isSpecificPath: pathParts.length > 4
+        };
+    }
+
+    private async getRepoContents(owner: string, repo: string, branch: string) {
+        const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
+        const response = await axios.get(treeUrl);
+        return response.data.tree;
+    }
+
     private async crawlAndScrape(startUrl: string, depth: number, webview: vscode.Webview, method: string): Promise<void> {
-        const visited = new Set<string>();
-        const toVisit: Array<{url: string; depth: number}> = [{url: startUrl, depth: 0}];
-        const plannedVisits = new Set([startUrl]);
-        let currentPage = 0;
+        const startTime = new Date();
+        
+        // Clear file at start for both branches
+        if (this._outputFile) {
+            await this.saveToFile('', false);
+        }
 
-        // Parse the initial URL for reference
-        const baseUrlObj = new URL(startUrl);
-        const basePathParts = baseUrlObj.pathname.split('/').filter(Boolean);
-
-        const isWithinDocs = (url: string): boolean => {
+        if (startUrl.includes('github.com')) {
             try {
-                const urlObj = new URL(url);
-                
-                // Check if same hostname
-                if (urlObj.hostname !== baseUrlObj.hostname) {
-                    return false;
+
+                const githubInfo = this.parseGitHubUrl(startUrl);
+
+                if (!this._outputFile) {
+                    throw new Error('Output file path not set');
                 }
 
-                // Get path parts for comparison
-                const urlPathParts = urlObj.pathname.split('/').filter(Boolean);
-                
-                // Check if the URL path starts with the base path
-                for (let i = 0; i < basePathParts.length; i++) {
-                    if (urlPathParts[i] !== basePathParts[i]) {
-                        return false;
-                    }
-                }
-
-                // Calculate the depth difference
-                const depthDifference = urlPathParts.length - basePathParts.length;
-                
-                // URL must not go above the base path and must be within allowed depth
-                return depthDifference >= 0 && depthDifference < depth;
-            } catch {
-                return false;
-            }
-        };
-
-        const getLinks = async (url: string): Promise<string[]> => {
-            try {
-                const response = await axios.get(url, { 
-                    timeout: 30000,
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                    }
-                });
-                const html = response.data;
-                const links: string[] = [];
-                
-                const hrefRegex = /href=["']([^"']+)["']/g;
-                let match;
-                
-                while ((match = hrefRegex.exec(html)) !== null) {
-                    try {
-                        const href = match[1];
-                        if (href.startsWith('#') || 
-                            href.startsWith('javascript:') || 
-                            href.match(/\.(pdf|zip|rar|exe|dmg|pkg|deb|rpm)$/i)) {
-                            continue;
-                        }
-                        const fullUrl = new URL(href, url).href;
-                        if (fullUrl.startsWith('http') && isWithinDocs(fullUrl)) {
-                            links.push(fullUrl);
-                        }
-                    } catch (e) {
-                        console.error('Invalid URL:', e);
-                    }
-                }
-                
-                return [...new Set(links)];
-            } catch (error) {
-                console.error(`Error fetching links from ${url}:`, error);
-                return [];
-            }
-        };
-
-        webview.postMessage({
-            type: 'status',
-            message: `Starting crawl from ${startUrl} with depth ${depth}`
-        });
-
-        while (toVisit.length > 0 && !this._stopCrawling) {
-            const current = toVisit.shift()!;
-            const currentUrl = current.url;
-            const currentDepth = current.depth;
-
-            if (visited.has(currentUrl) || currentDepth >= depth) {
-                continue;
-            }
-
-            currentPage++;
-            visited.add(currentUrl);
-
-            webview.postMessage({
-                type: 'status',
-                message: `[${currentPage}/${plannedVisits.size}] Processing: ${currentUrl} (Depth: ${currentDepth}/${depth})`
-            });
-
-            try {
-                // Get the markdown content using selected method
-                const pageContent = await this.getPageContent(currentUrl, method);
-                
-                // Save this page's content
-                const content = `\n\n# ${currentUrl}\n\n${pageContent}\n\n---\n`;
-                await this.saveToFile(content, true);
-
-                // Only get links if we haven't reached max depth
-                if (currentDepth < depth - 1) {  // Important change here
-                    webview.postMessage({
-                        type: 'status',
-                        message: `Finding links in ${currentUrl}...`
-                    });
-
-                    const links = await getLinks(currentUrl);
-                    let newLinks = 0;
-
-                    for (const link of links) {
-                        if (!visited.has(link) && !plannedVisits.has(link)) {
-                            toVisit.push({url: link, depth: currentDepth + 1});
-                            plannedVisits.add(link);
-                            newLinks++;
-                        }
-                    }
-
-                    webview.postMessage({
-                        type: 'status',
-                        message: `Found ${newLinks} new links in ${currentUrl}`
-                    });
-                }
-
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            } catch (error) {
-                console.error(`Error processing ${currentUrl}:`, error);
-                // Save error information to the file
-                const errorContent = `\n\n# Error processing ${currentUrl}\n\n${error instanceof Error ? error.message : 'Unknown error'}\n\n---\n`;
-                await this.saveToFile(errorContent, true);
-                
                 webview.postMessage({
                     type: 'status',
-                    message: `Error processing ${currentUrl}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                    message: `Starting GitHub repository crawl: \n${githubInfo.owner}/${githubInfo.repo}`
+                });
+
+                const files = await this.getRepoContents(
+                    githubInfo.owner, 
+                    githubInfo.repo, 
+                    githubInfo.branch
+                );
+
+                // Filter files based on depth and base path
+                const filteredFiles = files.filter((file: any) => {
+                    if (file.type !== 'blob') return false;
+                    
+                    // Check if file is within specified directory
+                    if (githubInfo.isSpecificPath && !file.path.startsWith(githubInfo.basePath)) {
+                        return false;
+                    }
+
+                    // Calculate relative depth
+                    const relativePath = githubInfo.isSpecificPath 
+                        ? file.path.slice(githubInfo.basePath.length).replace(/^\//, '')
+                        : file.path;
+                    const fileDepth = relativePath.split('/').filter(Boolean).length;
+                    
+                    return fileDepth <= depth;
+                });
+
+                let content = '';
+                let currentFile = 0;
+                const totalFiles = filteredFiles.length;
+
+                // Add initial count message
+                webview.postMessage({
+                    type: 'status',
+                    message: `Found ${totalFiles} files to process within depth ${depth}`
+                });
+
+                for (const file of filteredFiles) {
+                    if (this._stopCrawling) {
+                        webview.postMessage({
+                            type: 'status',
+                            message: 'Crawling stopped by user.'
+                        });
+                        break;
+                    }
+
+                    currentFile++;
+
+                    webview.postMessage({
+                        type: 'status',
+                        message: `[${currentFile}/${totalFiles}] ${file.path}\nDepth: ${file.path.split('/').length}/${depth}`
+                    });
+
+                    try {
+                        // let fileContent;
+                        // Create raw URL for both methods
+                        const rawUrl = `https://raw.githubusercontent.com/${githubInfo.owner}/${githubInfo.repo}/${githubInfo.branch}/${file.path}`;
+                        
+                        // if (method === 'api') {
+                        //     // API method
+                        //     const response = await axios.get(rawUrl);
+                        //     fileContent = response.data;
+                        //     // Keep delay only for API method to prevent rate limiting
+                        //     await new Promise(resolve => setTimeout(resolve, 500));
+                        // } else {
+                            // Browser method - now using the same raw URL
+                            // fileContent = await this.getContentWithPuppeteer(rawUrl);
+                        const response = await axios.get(rawUrl, {
+                            headers: {
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                            }
+                        });
+                        const fileContent = response.data;
+                        // }
+
+                        const language = file.path.split('.').pop() || '';
+                        // content += [
+                        const content = [
+                            `\n\n# File: ${file.path}`,
+                            `Source: https://github.com/${githubInfo.owner}/${githubInfo.repo}/blob/${githubInfo.branch}/${file.path}`,
+                            '',
+                            '```' + language,
+                            fileContent,
+                            '```',
+                            '---\n'
+                        ].join('\n');
+
+                        await this.saveToFile(content, true);
+                        
+
+                    } catch (error) {
+                        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                        webview.postMessage({
+                            type: 'status',
+                            message: `Error processing ${file.path}: ${errorMessage}`,
+                            isError: true
+                        });
+                        await this.saveToFile(`\n\n# Error processing ${file.path}\n\n${errorMessage}\n\n---\n`, true);
+                    }
+                }
+
+                const finalMessage = this._stopCrawling ? 
+                    `Crawling stopped by user. \nProcessed ${currentFile} of ${totalFiles} files.` :
+                    `Completed! \nProcessed ${currentFile} of ${totalFiles} files.`;
+
+                webview.postMessage({
+                    type: 'status',
+                    message: finalMessage
+                });
+                const endTime = new Date();
+                const duration = (endTime.getTime() - startTime.getTime()) / 1000;
+                
+                const stats = [
+                    '\n\n# Crawl Statistics',
+                    '',
+                    `- **Start URL:** ${startUrl}`,
+                    `- **Repository:** ${githubInfo.owner}/${githubInfo.repo}`,
+                    `- **Branch:** ${githubInfo.branch}`,
+                    `- **Depth:** ${depth}`,
+                    `- **Files processed:** ${currentFile}`,
+                    `- **Total files found:** ${totalFiles}`,
+                    `- **Crawl method:** ${method}`,
+                    `- **Duration:** ${duration.toFixed(2)} seconds`,
+                    `- **Crawl completed:** ${endTime.toLocaleString()}`
+                ].join('\n');
+
+                await this.saveToFile(stats, true);
+
+                webview.postMessage({
+                    type: 'checkAutoOpen',
+                    filePath: this._outputFile
+                });
+
+            } catch (error) {
+                console.error('Error processing repository:', error);
+                webview.postMessage({
+                    type: 'status',
+                    message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
                     isError: true
                 });
             }
+        } else {
+            // const startTime = new Date(); 
+            const visited = new Set<string>();
+            const toVisit: Array<{url: string; depth: number}> = [{url: startUrl, depth: 0}];
+            const plannedVisits = new Set([startUrl]);
+            let currentPage = 0;
+
+            // Parse the initial URL for reference
+            const baseUrlObj = new URL(startUrl);
+            const basePathParts = baseUrlObj.pathname.split('/').filter(Boolean);
+
+            const isWithinDocs = (url: string): boolean => {
+                try {
+                    const urlObj = new URL(url);
+                    
+                    // Check if same hostname
+                    if (urlObj.hostname !== baseUrlObj.hostname) {
+                        return false;
+                    }
+
+                    // Get path parts for comparison
+                    const urlPathParts = urlObj.pathname.split('/').filter(Boolean);
+                    
+                    // Check if the URL path starts with the base path
+                    for (let i = 0; i < basePathParts.length; i++) {
+                        if (urlPathParts[i] !== basePathParts[i]) {
+                            return false;
+                        }
+                    }
+
+                    // Calculate the depth difference
+                    const depthDifference = urlPathParts.length - basePathParts.length;
+                    
+                    // URL must not go above the base path and must be within allowed depth
+                    return depthDifference >= 0 && depthDifference < depth;
+                } catch {
+                    return false;
+                }
+            };
+
+            const getLinks = async (url: string): Promise<string[]> => {
+                try {
+                    const response = await axios.get(url, { 
+                        timeout: 30000,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                        }
+                    });
+                    const html = response.data;
+                    const links: string[] = [];
+                    
+                    const hrefRegex = /href=["']([^"']+)["']/g;
+                    let match;
+                    
+                    while ((match = hrefRegex.exec(html)) !== null) {
+                        try {
+                            const href = match[1];
+                            if (href.startsWith('#') || 
+                                href.startsWith('javascript:') || 
+                                href.match(/\.(pdf|zip|rar|exe|dmg|pkg|deb|rpm)$/i)) {
+                                continue;
+                            }
+                            const fullUrl = new URL(href, url).href;
+                            if (fullUrl.startsWith('http') && isWithinDocs(fullUrl)) {
+                                links.push(fullUrl);
+                            }
+                        } catch (e) {
+                            console.error('Invalid URL:', e);
+                        }
+                    }
+                    
+                    return [...new Set(links)];
+                } catch (error) {
+                    console.error(`Error fetching links from ${url}:`, error);
+                    return [];
+                }
+            };
+
+            webview.postMessage({
+                type: 'status',
+                message: `Starting crawl from ${startUrl} with depth ${depth}`
+            });
+
+            while (toVisit.length > 0 && !this._stopCrawling) {
+                const current = toVisit.shift()!;
+                const currentUrl = current.url;
+                const currentDepth = current.depth;
+
+                if (visited.has(currentUrl) || currentDepth >= depth) {
+                    continue;
+                }
+
+                currentPage++;
+                visited.add(currentUrl);
+
+                webview.postMessage({
+                    type: 'status',
+                    message: `[${currentPage}/${plannedVisits.size}] ${currentUrl}\nDepth: ${currentDepth}/${depth}`
+                });
+
+                try {
+                    // Get the markdown content using selected method
+                    const pageContent = await this.getPageContent(currentUrl, method);
+                    
+                    // Make content formatting more consistent with GitHub branch
+                    const content = [
+                        `\n\n# Source: ${currentUrl}`,
+                        '',
+                        pageContent,
+                        '---\n'
+                    ].join('\n');
+                    
+                    await this.saveToFile(content, true);
+
+                    // Only get links if we haven't reached max depth
+                    if (currentDepth < depth - 1) {  // Important change here
+                        webview.postMessage({
+                            type: 'status',
+                            message: `Finding links in ${currentUrl}...`
+                        });
+
+                        const links = await getLinks(currentUrl);
+                        let newLinks = 0;
+
+                        for (const link of links) {
+                            if (!visited.has(link) && !plannedVisits.has(link)) {
+                                toVisit.push({url: link, depth: currentDepth + 1});
+                                plannedVisits.add(link);
+                                newLinks++;
+                            }
+                        }
+
+                        webview.postMessage({
+                            type: 'status',
+                            message: `Found ${newLinks} new links in ${currentUrl}`
+                        });
+                    }
+
+                    if (method === 'api') {
+                        // Only add delay for API method
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                    webview.postMessage({
+                        type: 'status',
+                        message: `Error processing ${currentUrl}: ${errorMessage}`,
+                        isError: true
+                    });
+                    await this.saveToFile(`\n\n# Error processing ${currentUrl}\n\n${errorMessage}\n\n---\n`, true);
+                }
+            }
+
+            const finalMessage = this._stopCrawling ? 
+                `Crawling stopped by user. Processed ${currentPage} pages.` :
+                `Completed! Processed ${currentPage} pages.`;
+
+            webview.postMessage({
+                type: 'status',
+                message: finalMessage
+            });
+
+            // Save final statistics
+            const endTime = new Date();
+            const duration = (endTime.getTime() - startTime.getTime()) / 1000;
+
+            const stats = [
+                '\n\n# Crawl Statistics',
+                '',
+                `- **Start URL:** ${startUrl}`,
+                `- **Depth:** ${depth}`,
+                `- **Pages visited:** ${visited.size}`,
+                `- **Crawl method:** ${method}`,
+                `- **Duration:** ${duration.toFixed(2)} seconds`,
+                `- **Crawl completed:** ${new Date().toLocaleString()}`
+            ].join('\n');
+            await this.saveToFile(stats, true);
+
+            // Send message to webview to check auto-open setting
+            webview.postMessage({
+                type: 'checkAutoOpen',
+                filePath: this._outputFile
+            });
         }
-
-        const finalMessage = this._stopCrawling ? 
-            `Crawling stopped by user. Processed ${currentPage} pages.` :
-            `Completed! Processed ${currentPage} pages.`;
-
-        webview.postMessage({
-            type: 'status',
-            message: finalMessage
-        });
-
-        // Save final statistics
-        const stats = `\n\n# Crawl Statistics\n\n- Total pages processed: ${currentPage}\n- Total unique URLs found: ${plannedVisits.size}\n- Crawl completed: ${new Date().toISOString()}\n`;
-        await this.saveToFile(stats, true);
-
-        // Send message to webview to check auto-open setting
-        webview.postMessage({
-            type: 'checkAutoOpen',
-            filePath: this._outputFile
-        });
     }
 
     private _getHtmlForWebview(webview: vscode.Webview) {

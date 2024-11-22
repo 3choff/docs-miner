@@ -1,86 +1,88 @@
 const vscode = acquireVsCodeApi();
-const urlInput = document.getElementById('urlInput');
-const depthSlider = document.getElementById('depthSlider');
-const depthValue = document.getElementById('depthValue');
-const depthDescription = document.getElementById('depthDescription');
-const startButton = document.getElementById('startButton');
-const stopButton = document.getElementById('stopButton');
-const status = document.getElementById('status');
-const autoOpenFile = document.getElementById('autoOpenFile');
-const outputFolder = document.getElementById('outputFolder');
-const crawlerMethod = document.getElementById('crawlerMethod');
+const ELEMENTS = {
+    urlInput: document.getElementById('urlInput'),
+    depthSlider: document.getElementById('depthSlider'),
+    depthValue: document.getElementById('depthValue'),
+    depthDescription: document.getElementById('depthDescription'),
+    startButton: document.getElementById('startButton'),
+    stopButton: document.getElementById('stopButton'),
+    status: document.getElementById('status'),
+    autoOpenFile: document.getElementById('autoOpenFile'),
+    outputFolder: document.getElementById('outputFolder'),
+    crawlerMethod: document.getElementById('crawlerMethod')
+};
 
-function updateDepthDescription(depth) {
-    const descriptions = {
-        1: 'Current page only',
-        2: 'Current page + one level down',
-        3: 'Current page + two levels down',
-        4: 'Current page + three levels down',
-        5: 'Current page + four levels down'
-    };
-    depthDescription.textContent = descriptions[depth] || '';
+const DEPTH_DESCRIPTIONS = {
+    1: 'Only the entered page',
+    2: 'The entered page and links at the same directory level',
+    3: 'The entered page and links up to two directory levels',
+    4: 'The entered page and links up to three directory levels',
+    5: 'The entered page and links up to four directory levels'
+};
+
+function updateStatus(message, isError = false) {
+    ELEMENTS.status.textContent = message;
+    ELEMENTS.status.classList.toggle('error', isError);
 }
 
-depthSlider.addEventListener('input', (e) => {
-    const depth = e.target.value;
-    depthValue.textContent = depth;
-    updateDepthDescription(parseInt(depth));
-});
+function toggleCrawlButtons(isCrawling) {
+    ELEMENTS.startButton.style.display = isCrawling ? 'none' : 'block';
+    ELEMENTS.stopButton.style.display = isCrawling ? 'block' : 'none';
+}
 
-startButton.addEventListener('click', () => {
-    const url = urlInput.value.trim();
+function validateUrl(url) {
     if (!url) {
-        status.textContent = 'Please enter a URL';
-        status.classList.add('error');
-        return;
+        updateStatus('Please enter a URL', true);
+        return false;
     }
-
     try {
         new URL(url);
+        return true;
     } catch {
-        status.textContent = 'Please enter a valid URL';
-        status.classList.add('error');
-        return;
+        updateStatus('Please enter a valid URL', true);
+        return false;
     }
+}
 
-    startButton.style.display = 'none';
-    stopButton.style.display = 'block';
-    status.classList.remove('error');
-    status.textContent = 'Starting crawl...';
+ELEMENTS.depthSlider.addEventListener('input', (e) => {
+    const depth = parseInt(e.target.value);
+    ELEMENTS.depthValue.textContent = depth;
+    ELEMENTS.depthDescription.textContent = DEPTH_DESCRIPTIONS[depth] || '';
+});
+
+ELEMENTS.startButton.addEventListener('click', () => {
+    const url = ELEMENTS.urlInput.value.trim();
+    if (!validateUrl(url)) return;
+
+    toggleCrawlButtons(true);
+    updateStatus('Starting crawl...');
 
     vscode.postMessage({
         type: 'startCrawl',
-        url: url,
-        depth: parseInt(depthSlider.value),
-        outputFolder: outputFolder.value.trim(),
-        method: crawlerMethod.value
+        url,
+        depth: parseInt(ELEMENTS.depthSlider.value),
+        outputFolder: ELEMENTS.outputFolder.value.trim(),
+        method: ELEMENTS.crawlerMethod.value
     });
 });
 
-stopButton.addEventListener('click', () => {
+ELEMENTS.stopButton.addEventListener('click', () => {
     vscode.postMessage({ type: 'stopCrawl' });
 });
 
 window.addEventListener('message', event => {
-    const message = event.data;
-    switch (message.type) {
+    const { type, message, isError } = event.data;
+    
+    switch (type) {
         case 'status':
-            status.textContent = message.message;
-            if (message.isError) {
-                status.classList.add('error');
-            } else {
-                status.classList.remove('error');
-            }
-            if (message.message.includes('Completed!') || message.message.includes('stopped by user')) {
-                startButton.style.display = 'block';
-                stopButton.style.display = 'none';
+            updateStatus(message, isError);
+            if (message.includes('Completed!') || message.includes('stopped by user')) {
+                toggleCrawlButtons(false);
             }
             break;
         case 'checkAutoOpen':
-            if (autoOpenFile.checked) {
-                vscode.postMessage({ 
-                    type: 'openFile'
-                });
+            if (ELEMENTS.autoOpenFile.checked) {
+                vscode.postMessage({ type: 'openFile' });
             }
             break;
     }

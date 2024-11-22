@@ -6,33 +6,45 @@
     <link rel="stylesheet" href="${stylesUri}">
 </head>
 <body>
-    <input type="text" id="urlInput" placeholder="Enter URL to scrape (e.g., https://example.com)" />
+    <div class="url-input">
+        <input type="text" id="urlInput" placeholder="Enter a URL to scrape" />
+    </div>
     <div class="crawler-method">
+        <label for="crawlerMethod">Select a crawling method:</label>
         <select id="crawlerMethod">
-            <option value="api">API Method (Faster but may fail on some sites)</option>
-            <option value="browser">Browser Method (Slower but more reliable)</option>
+            <option value="api">API (Faster but may fail on some sites)</option>
+            <option value="browser">Browser (Slower but more reliable)</option>
         </select>
     </div>
-    <div class="depth-control">
-        <input type="range" id="depthSlider" min="1" max="5" value="1" />
-        <div class="depth-value">Depth: <span id="depthValue">1</span></div>
-        <div id="depthDescription">Single page only</div>
+    <div class="section-container">
+        <div class="section-label">Set the depth of crawling</div>
+        <div class="depth-control">
+            <input type="range" id="depthSlider" min="1" max="5" value="1" />
+            <div class="depth-value">Depth: <span id="depthValue">1</span></div>
+            <div id="depthDescription">Only the entered page</div>
+        </div>  
+    </div>
+    <div class="section-container">
+        <div class="section-label">File Settings</div>
+        <div class="settings">
+        <label class="checkbox-container">
+                <input type="checkbox" id="autoOpenFile" />
+                <span class="checkbox-label">Auto-open the output file</span>
+            </label>
+            <div class="folder-input">
+                <input type="text" id="outputFolder" placeholder="Output folder (optional)" />
+            </div>
+        </div>
     </div>
     <div class="controls">
         <button id="startButton">Start Crawling</button>
         <button id="stopButton">Stop Crawling</button>
     </div>
     <div class="status" id="status"></div>
-    <div class="settings">
-        <label class="checkbox-container">
-            <input type="checkbox" id="autoOpenFile" />
-            <span class="checkbox-label">Automatically open generated file</span>
-        </label>
-        <div class="folder-input">
-            <input type="text" id="outputFolder" placeholder="Output folder (optional)" />
-        </div>
+    <div class="feedback">
+        <div>Have feedback or found an issue?</div>
+        <a href="https://github.com/3choff/docs-miner/issues" target="_blank">Let me know on GitHub</a>
     </div>
-
     <script src="${scriptUri}"></script>
 </body>
 </html>

@@ -1,5 +1,16 @@
 # Change Log
 
+## [1.2.0] - 2024-11-22
+
+### Added
+- GitHub repository documentation generation
+- Support for both full repositories and specific directories
+- Depth-based file filtering for repository crawling
+
+### Changed
+- Improved webview UI text for better clarity and consistency
+- Refactored webview code
+
 ## [1.1.0] - 2024-11-21
 
 ### Added
