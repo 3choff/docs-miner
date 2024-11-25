@@ -44,10 +44,32 @@ function validateUrl(url) {
     }
 }
 
+function isGithubUrl(url) {
+    try {
+        const urlObj = new URL(url);
+        return urlObj.hostname === 'github.com';
+    } catch {
+        return false;
+    }
+}
+
+function updateMethodDropdown(url) {
+    const isGithub = isGithubUrl(url);
+    ELEMENTS.crawlerMethod.disabled = isGithub;
+    ELEMENTS.crawlerMethod.closest('.crawler-method').classList.toggle('github-mode', isGithub);
+}
+
 ELEMENTS.depthSlider.addEventListener('input', (e) => {
     const depth = parseInt(e.target.value);
     ELEMENTS.depthValue.textContent = depth;
     ELEMENTS.depthDescription.textContent = DEPTH_DESCRIPTIONS[depth] || '';
+});
+
+ELEMENTS.urlInput.addEventListener('input', (e) => {
+    const url = e.target.value.trim();
+    if (url) {
+        updateMethodDropdown(url);
+    }
 });
 
 ELEMENTS.startButton.addEventListener('click', () => {

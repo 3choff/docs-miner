@@ -9,10 +9,21 @@
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
+        "moduleResolution": "node",
+        "baseUrl": ".",
+        "paths": {
+            "*": ["src/*"]
+        },
         "typeRoots": [
             "./node_modules/@types",
             "./src/types"
         ]
     },
-    "exclude": ["node_modules", ".vscode-test"]
+    "include": [
+        "src/**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        ".vscode-test"
+    ]
 }

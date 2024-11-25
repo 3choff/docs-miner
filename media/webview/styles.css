@@ -96,7 +96,21 @@ input[type="range"]:focus {
 .crawler-method select:focus {
     border-color: var(--input-focus-border);
 }
+.github-notice {
+    display: none;
+    font-size: 0.9em;
+    color: var(--vscode-descriptionForeground);
+    margin-top: 4px;
+    font-style: italic;
+}
 
+.crawler-method.github-mode .github-notice {
+    display: block;
+}
+
+.crawler-method.github-mode #crawlerMethod {
+    opacity: 0.7;
+}
 .depth-control {
     margin: 0px;
     padding: 10px;

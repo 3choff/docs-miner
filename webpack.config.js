@@ -1,4 +1,5 @@
 const path = require('path');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = {
   target: 'node',
@@ -15,7 +16,10 @@ module.exports = {
     'utf-8-validate': 'utf-8-validate'
   },
   resolve: {
-    extensions: ['.ts', '.js']
+    extensions: ['.ts', '.js'],
+    fallback: {
+      "canvas": false
+    }
   },
   module: {
     rules: [
@@ -30,6 +34,16 @@ module.exports = {
       }
     ]
   },
+  plugins: [
+    new CopyWebpackPlugin({
+      patterns: [
+        {
+          from: 'media',
+          to: 'media'
+        }
+      ]
+    })
+  ],
   ignoreWarnings: [
     {
       module: /yargs|puppeteer-chromium-resolver/

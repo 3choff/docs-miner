@@ -12,6 +12,7 @@ vsc-extension-quickstart.md
 .github/**
 images/**
 node_modules/**
+changes.txt
 
 # Keep only essential Puppeteer files
 !node_modules/puppeteer-core/lib/cjs/**
@@ -30,3 +31,7 @@ node_modules/**
 **/.github/**
 **/.vscode/**
 **/coverage/**
+
+# Explicitly keep important markdown files
+!CHANGELOG.md
+!README.md

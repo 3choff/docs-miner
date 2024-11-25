@@ -1,5 +1,18 @@
 # Change Log
 
+## [1.3.0] - 2024-11-24
+
+### Added
+- Major internal refactoring for improved code maintainability
+- Enhanced error handling and reporting
+- Dedicated service architecture for better separation of concerns
+- Improved type safety throughout the codebase
+- Better content cleaning and formatting:
+  - Enhanced SVG handling in browser method
+  - Improved navigation and footer removal
+  - Fixed JSON file formatting in GitHub repository crawling
+  - Added non-text file skipping in repository crawling
+
 ## [1.2.0] - 2024-11-22
 
 ### Added
