@@ -10,7 +10,8 @@ const ELEMENTS = {
     autoOpenFile: document.getElementById('autoOpenFile'),
     outputFolder: document.getElementById('outputFolder'),
     crawlerMethod: document.getElementById('crawlerMethod'),
-    outputFileName: document.getElementById('outputFileName')
+    outputFileName: document.getElementById('outputFileName'),
+    selectFileButton: document.getElementById('selectFileButton'),
 };
 
 const DEPTH_DESCRIPTIONS = {
@@ -94,8 +95,12 @@ ELEMENTS.stopButton.addEventListener('click', () => {
     vscode.postMessage({ type: 'stopCrawl' });
 });
 
+ELEMENTS.selectFileButton.addEventListener('click', () => {
+    vscode.postMessage({ type: 'selectFile' });
+});
+
 window.addEventListener('message', event => {
-    const { type, message, isError } = event.data;
+    const { type, message, isError, filePath } = event.data;
     
     switch (type) {
         case 'status':
@@ -107,6 +112,25 @@ window.addEventListener('message', event => {
         case 'checkAutoOpen':
             if (ELEMENTS.autoOpenFile.checked) {
                 vscode.postMessage({ type: 'openFile' });
+            }
+            break;
+
+        case 'fileSelected':
+            if (filePath) {
+                const workspacePath = event.data.workspacePath;
+                
+                // Get filename without extension
+                const fullFileName = filePath.split(/[/\\]/).pop() || '';
+                const fileName = fullFileName.replace(/\.md$/, '');
+
+                // Get relative path by removing filename from filepath
+                const relativePath = filePath.slice(0, -fullFileName.length);
+
+                // Get folder path by removing workspace path from relative path
+                const folderPath = relativePath.replace(workspacePath, '').replace(/^[/\\]/, '').replace(/[/\\]$/, '');
+                
+                ELEMENTS.outputFileName.value = fileName;
+                ELEMENTS.outputFolder.value = folderPath;
             }
             break;
     }

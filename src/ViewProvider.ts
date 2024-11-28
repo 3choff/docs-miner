@@ -83,6 +83,34 @@ export class ViewProvider implements vscode.WebviewViewProvider {
                     }
                     break;
                 }
+
+                case 'selectFile': {
+                    const workspaceFolders = vscode.workspace.workspaceFolders;
+                    if (!workspaceFolders) {
+                        vscode.window.showErrorMessage('Please open a workspace first');
+                        return;
+                    }
+                    const options: vscode.OpenDialogOptions = {
+                        canSelectMany: false,
+                        openLabel: 'Select',
+                        filters: {
+                            'Markdown': ['md']
+                        }
+                    };
+                    
+                    const fileUri = await vscode.window.showOpenDialog(options);
+                    if (fileUri && fileUri[0]) {
+                        const filePath = fileUri[0].fsPath;
+                        const workspacePath = workspaceFolders[0].uri.fsPath
+                        // Send the selected file path back to the webview
+                        webviewView.webview.postMessage({
+                            type: 'fileSelected',
+                            filePath: filePath,
+                            workspacePath: workspacePath
+                        });
+                    }
+                    break;
+                }
             }
         });
     }

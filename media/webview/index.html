@@ -28,16 +28,17 @@
     <div class="section-container">
         <div class="section-label">File Settings</div>
         <div class="settings">
-            <label class="checkbox-container">
-                <input type="checkbox" id="autoOpenFile" />
-                <span class="checkbox-label">Auto-open the output file</span>
-            </label>
-            <div class="file-input">
+            <div class="file-input-container">
+                <button id="selectFileButton" class="inline-button" title="Add to file">+</button>
                 <input type="text" id="outputFileName" placeholder="File name (optional)" />
             </div>
             <div class="folder-input">
                 <input type="text" id="outputFolder" placeholder="Output folder (optional)" />
             </div>
+            <label class="checkbox-container">
+                <input type="checkbox" id="autoOpenFile" />
+                <span class="checkbox-label">Auto-open the output file</span>
+            </label>
         </div>
     </div>
     <div class="controls">

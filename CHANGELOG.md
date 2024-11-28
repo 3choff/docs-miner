@@ -1,5 +1,13 @@
 # Change Log
 
+## [1.5.0] - 2024-11-28
+
+### Added
+- File selection button for appending to existing files
+- Improved file settings UI with cleaner button layout
+- Added headers to crawled content (File/Source information)
+- Improved filepath handling for better folder detection
+
 ## [1.4.1] - 2024-11-27
 
 ### Added

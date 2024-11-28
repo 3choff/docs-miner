@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import axios from 'axios';
 import PCR from 'puppeteer-chromium-resolver';
 import { ICrawlerService, CrawlOptions, GithubInfo } from '../types';
@@ -38,7 +39,14 @@ export class CrawlerService implements ICrawlerService {
     public async crawl(options: CrawlOptions, webview: vscode.Webview): Promise<void> {
         this.stopCrawling = false;
         const startTime = new Date();
-        await this.fileService.saveContent('', false);
+        // await this.fileService.saveContent('', false);
+
+        // Check if output file exists
+        const outputFile = this.fileService.getOutputFile();
+        if (!outputFile || !fs.existsSync(outputFile)) {
+            // If file doesn't exist, create empty file (current behavior)
+            await this.fileService.saveContent('', false);
+        }
 
         try {
             if (options.url.includes('github.com')) {
@@ -61,6 +69,11 @@ export class CrawlerService implements ICrawlerService {
     private async crawlGithubRepo(options: CrawlOptions, webview: vscode.Webview, startTime: Date): Promise<void> {
         try {
             const githubInfo = this.parseGithubUrl(options.url);
+            const initialHeader = [
+                `\n\n# Repository: ${githubInfo.owner}/${githubInfo.repo}`,
+                `## Branch: ${githubInfo.branch}`,
+            ].join('\n');
+            await this.fileService.saveContent(initialHeader, true);
             webview.postMessage({
                 type: 'status',
                 message: `Starting GitHub repository crawl: \n${githubInfo.owner}/${githubInfo.repo}`
@@ -158,8 +171,8 @@ export class CrawlerService implements ICrawlerService {
                     const skipReason = this.EXCLUDED_EXTENSIONS.get(extension)!;
 
                     content = [
-                        `\n\n# File: ${file.path}`,
-                        `Source: https://github.com/${githubInfo.owner}/${githubInfo.repo}/blob/${githubInfo.branch}/${file.path}`,
+                        `\n\n## File: ${file.path}`,
+                        `### URL: https://github.com/${githubInfo.owner}/${githubInfo.repo}/blob/${githubInfo.branch}/${file.path}`,
                         '',
                         `Content skipped: ${skipReason}`,
                         '---\n'
@@ -173,8 +186,8 @@ export class CrawlerService implements ICrawlerService {
                     // Handle JSON files specially
                     if (language === 'json') {
                         content = [
-                            `\n\n# File: ${file.path}`,
-                            `Source: https://github.com/${githubInfo.owner}/${githubInfo.repo}/blob/${githubInfo.branch}/${file.path}`,
+                            `\n\n## File: ${file.path}`,
+                            `### URL: https://github.com/${githubInfo.owner}/${githubInfo.repo}/blob/${githubInfo.branch}/${file.path}`,
                             '',
                             '```' + language,
                             typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2),
@@ -183,8 +196,8 @@ export class CrawlerService implements ICrawlerService {
                         ].join('\n');
                     } else {
                         content = [
-                            `\n\n# File: ${file.path}`,
-                            `Source: https://github.com/${githubInfo.owner}/${githubInfo.repo}/blob/${githubInfo.branch}/${file.path}`,
+                            `\n\n## File: ${file.path}`,
+                            `### URL: https://github.com/${githubInfo.owner}/${githubInfo.repo}/blob/${githubInfo.branch}/${file.path}`,
                             '',
                             '```' + language,
                             response.data,
@@ -204,6 +217,10 @@ export class CrawlerService implements ICrawlerService {
     }
 
     private async crawlWebsite(options: CrawlOptions, webview: vscode.Webview, startTime: Date): Promise<void> {
+        const initialHeader = [
+            `\n\n# Source: ${options.url}`,
+        ].join('\n');
+        await this.fileService.saveContent(initialHeader, true);
         const visited = new Set<string>();
         const toVisit = [{ url: options.url, depth: 0 }];
         const plannedVisits = new Set([options.url]);
@@ -236,7 +253,7 @@ export class CrawlerService implements ICrawlerService {
                 const pageContent = await this.getPageContent(current.url, options.method);
                 
                 const formattedContent = [
-                    `\n\n# Source: ${current.url}`,
+                    `\n\n## URL: ${current.url}`,
                     '',
                     pageContent,
                     '---\n'
@@ -310,7 +327,7 @@ export class CrawlerService implements ICrawlerService {
         const stats = [
             '\n\n# Crawl Statistics',
             '',
-            `- **Start URL:** ${startUrl}`,
+            `- **Source:** ${startUrl}`,
             `- **Depth:** ${depth}`,
             `- **Pages processed:** ${visited.size}`,
             `- **Crawl method:** ${method}`,
@@ -469,7 +486,7 @@ export class CrawlerService implements ICrawlerService {
         const stats = [
             '\n\n# Crawl Statistics',
             '',
-            `- **Start URL:** ${startUrl}`,
+            `- **Source:** ${startUrl}`,
             `- **Repository:** ${githubInfo.owner}/${githubInfo.repo}`,
             `- **Branch:** ${githubInfo.branch}`,
             `- **Depth:** ${depth}`,
