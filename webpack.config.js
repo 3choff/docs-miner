@@ -39,7 +39,10 @@ module.exports = {
       patterns: [
         {
           from: 'media',
-          to: 'media'
+          to: 'media',
+          globOptions: {
+            ignore: ['**/*.gif']
+          }
         }
       ]
     })

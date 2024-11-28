@@ -24,7 +24,7 @@ export class FileService implements IFileService {
         }
     }
 
-    public createOutputPath(baseUrl: string, outputFolder?: string): string {
+    public createOutputPath(baseUrl: string, outputFolder?: string, outputFileName?: string): string {
         let outputPath = this.workspaceFolder;
         if (outputFolder) {
             outputPath = path.join(this.workspaceFolder, outputFolder);
@@ -33,19 +33,24 @@ export class FileService implements IFileService {
             }
         }
 
-        const urlParts = new URL(baseUrl);
-        let urlPath = urlParts.pathname.replace(/\//g, '-');
-        urlPath = urlPath.replace(/^-|-$/g, '');
-        if (urlPath === '') urlPath = 'home';
+        let fileName: string;
+        if (outputFileName) {
+            fileName = outputFileName.endsWith('.md') ? outputFileName : `${outputFileName}.md`;
+        } else {
+            const urlParts = new URL(baseUrl);
+            let urlPath = urlParts.pathname.replace(/\//g, '-');
+            urlPath = urlPath.replace(/^-|-$/g, '');
+            if (urlPath === '') urlPath = 'home';
 
-        const queryString = urlParts.search.replace(/[?&]/g, '-').replace(/[=]/g, '-');
-        const sanitizedQuery = queryString ? `-${queryString.replace(/^-|-$/g, '')}` : '';
+            const queryString = urlParts.search.replace(/[?&]/g, '-').replace(/[=]/g, '-');
+            const sanitizedQuery = queryString ? `-${queryString.replace(/^-|-$/g, '')}` : '';
 
-        const fileName = `${urlParts.hostname}${urlPath}${sanitizedQuery}-docs.md`
-            .toLowerCase()
-            .replace(/[^a-z0-9\-\.]/g, '-')
-            .replace(/-+/g, '-')
-            .substring(0, 255);
+            fileName = `${urlParts.hostname}${urlPath}${sanitizedQuery}.md`
+                .toLowerCase()
+                .replace(/[^a-z0-9\-\.]/g, '-')
+                .replace(/-+/g, '-')
+                .substring(0, 255);
+        }
 
         this.outputFile = path.join(outputPath, fileName);
         return this.outputFile;

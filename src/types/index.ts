@@ -5,6 +5,7 @@ export interface CrawlOptions {
     depth: number;
     method: 'api' | 'browser';
     outputFolder?: string;
+    outputFileName?: string;
 }
 
 export interface CrawlStats {
@@ -35,6 +36,6 @@ export interface IContentProcessor {
 
 export interface IFileService {
     saveContent(content: string, append?: boolean): Promise<void>;
-    createOutputPath(baseUrl: string, outputFolder?: string): string;
+    createOutputPath(baseUrl: string, outputFolder?: string, outputFileName?: string): string;
     getOutputFile(): string | undefined;
 }

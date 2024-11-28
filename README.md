@@ -1,6 +1,10 @@
-# Docs Miner VSCode Extension
+# Docs Miner
 
-This extension allows you to generate markdown documentation from web pages and GitHub repositories using either the Jina AI Reader API or a browser-based method.
+A VSCode extension that generates markdown documentation from web pages and GitHub repositories.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/3choff/docs-miner/main/media/demo.gif" width="800" alt="Demo">
+</p>
 
 If you find Docs Miner useful, please consider leaving a star ⭐ on github repository or buying me a [coffee](https://ko-fi.com/3choff) to keep me motivated to work on this project.
 
@@ -25,8 +29,7 @@ If you find Docs Miner useful, please consider leaving a star ⭐ on github repo
 2. Enter the URL you want to generate documentation from:
    - For websites: any web URL (e.g., https://example.com)
    - For GitHub: repository URL (e.g., https://github.com/username/repo) or specific directory (e.g., https://github.com/username/repo/tree/main/docs)
-3. Specify the output folder for the generated documentation
-4. Adjust the crawling depth using the slider:
+3. Adjust the crawling depth using the slider:
    - For websites:
      - Depth 1: Only the entered page
      - Depth 2: The entered page and links at the same directory level
@@ -39,9 +42,11 @@ If you find Docs Miner useful, please consider leaving a star ⭐ on github repo
      - Depth 3: Root + two directory levels
      - Depth 4: Root + three directory levels
      - Depth 5: Root + four directory levels
-5. Click "Start Crawling" to begin
-6. Monitor the progress in real-time
-7. Use the "Stop Crawling" button if you want to end the process early
+4. Specify the file name for the generated documentation. If not specified, the URL will be used instead.
+5. Specify the output folder for the generated documentation. If not specified, the current workspace folder will be used.
+6. Click "Start Crawling" to begin
+7. Monitor the progress in real-time
+8. Use the "Stop Crawling" button if you want to end the process early
 
 The markdown file will be automatically created in your specified output folder and opened for viewing.
 
@@ -100,3 +105,10 @@ Choose one of the following installation methods:
 ## Author
 - [3choff](https://github.com/3choff)
 
+## Contributing
+Feedback and contributions are welcome. If you encounter any issues or have suggestions for improvements, please create a new [issue](https://github.com/3choff/docs-miner/issues) on the GitHub repository.
+
+If you'd like to contribute to the development of the extension, feel free to submit a pull request with your changes.
+
+## License
+This extension is licensed under the [MIT License](https://github.com/3choff/docs-miner/blob/main/LICENSE).

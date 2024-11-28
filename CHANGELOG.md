@@ -1,5 +1,11 @@
 # Change Log
 
+## [1.4.1] - 2024-11-27
+
+### Added
+- Custom output file naming option in UI
+- Added demo GIF to README for better feature visualization
+
 ## [1.3.0] - 2024-11-24
 
 ### Added

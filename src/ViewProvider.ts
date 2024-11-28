@@ -50,11 +50,12 @@ export class ViewProvider implements vscode.WebviewViewProvider {
                         url: data.url,
                         depth: data.depth,
                         method: data.method,
-                        outputFolder: data.outputFolder
+                        outputFolder: data.outputFolder,
+                        outputFileName: data.outputFileName
                     };
 
                     try {
-                        const outputPath = this.fileService.createOutputPath(options.url, options.outputFolder);
+                        const outputPath = this.fileService.createOutputPath(options.url, options.outputFolder, options.outputFileName);
                         await this.crawlerService.crawl(options, webviewView.webview);
                     } catch (error) {
                         const errorMessage = error instanceof Error ? error.message : String(error);

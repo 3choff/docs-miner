@@ -9,7 +9,8 @@ const ELEMENTS = {
     status: document.getElementById('status'),
     autoOpenFile: document.getElementById('autoOpenFile'),
     outputFolder: document.getElementById('outputFolder'),
-    crawlerMethod: document.getElementById('crawlerMethod')
+    crawlerMethod: document.getElementById('crawlerMethod'),
+    outputFileName: document.getElementById('outputFileName')
 };
 
 const DEPTH_DESCRIPTIONS = {
@@ -84,6 +85,7 @@ ELEMENTS.startButton.addEventListener('click', () => {
         url,
         depth: parseInt(ELEMENTS.depthSlider.value),
         outputFolder: ELEMENTS.outputFolder.value.trim(),
+        outputFileName: ELEMENTS.outputFileName.value.trim(),
         method: ELEMENTS.crawlerMethod.value
     });
 });
