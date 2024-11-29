@@ -1,5 +1,11 @@
 # Change Log
 
+## [1.5.1] - 2024-11-29
+
+### Fixed
+- Removed unnecessary newlines at the start of generated content
+- Improved file compatibility with Windsurf by eliminating extra spacing
+
 ## [1.5.0] - 2024-11-28
 
 ### Added

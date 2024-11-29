@@ -70,7 +70,7 @@ export class CrawlerService implements ICrawlerService {
         try {
             const githubInfo = this.parseGithubUrl(options.url);
             const initialHeader = [
-                `\n\n# Repository: ${githubInfo.owner}/${githubInfo.repo}`,
+                `# Repository: ${githubInfo.owner}/${githubInfo.repo}`,
                 `## Branch: ${githubInfo.branch}`,
             ].join('\n');
             await this.fileService.saveContent(initialHeader, true);
@@ -218,7 +218,7 @@ export class CrawlerService implements ICrawlerService {
 
     private async crawlWebsite(options: CrawlOptions, webview: vscode.Webview, startTime: Date): Promise<void> {
         const initialHeader = [
-            `\n\n# Source: ${options.url}`,
+            `# Source: ${options.url}`,
         ].join('\n');
         await this.fileService.saveContent(initialHeader, true);
         const visited = new Set<string>();
@@ -332,8 +332,9 @@ export class CrawlerService implements ICrawlerService {
             `- **Pages processed:** ${visited.size}`,
             `- **Crawl method:** ${method}`,
             `- **Duration:** ${duration.toFixed(2)} seconds`,
-            `- **Crawl completed:** ${endTime.toLocaleString()}`
-        ].join('\n');
+            `- **Crawl completed:** ${endTime.toLocaleString()}`,
+            ''
+        ].join('\n') + '\n';
 
         await this.fileService.saveContent(stats, true);
 
@@ -493,8 +494,9 @@ export class CrawlerService implements ICrawlerService {
             `- **Files processed:** ${totalFiles}`,
             `- **Total files found:** ${totalFiles}`,
             `- **Duration:** ${duration.toFixed(2)} seconds`,
-            `- **Crawl completed:** ${endTime.toLocaleString()}`
-        ].join('\n');
+            `- **Crawl completed:** ${endTime.toLocaleString()}`,
+            ''
+        ].join('\n') + '\n';
 
         await this.fileService.saveContent(stats, true);
 

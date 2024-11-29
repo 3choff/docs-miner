@@ -14,9 +14,9 @@ export class FileService implements IFileService {
 
         try {
             if (append) {
-                await fs.promises.appendFile(this.outputFile, content);
+                await fs.promises.appendFile(this.outputFile, content, 'utf8');
             } else {
-                await fs.promises.writeFile(this.outputFile, content);
+                await fs.promises.writeFile(this.outputFile, content, 'utf8');
             }
         } catch (error) {
             console.error('Error saving to file:', error);

@@ -6,7 +6,7 @@ A VSCode extension that generates markdown documentation from web pages and GitH
   <img src="https://raw.githubusercontent.com/3choff/docs-miner/main/media/demo.gif" width="800" alt="Demo">
 </p>
 
-If you find Docs Miner useful, please consider leaving a star ⭐ on github repository or buying me a [coffee](https://ko-fi.com/3choff) to keep me motivated to work on this project.
+If you find Docs Miner useful, please consider leaving a star ⭐ on [github repository](https://github.com/3choff/docs-miner) or buying me a [coffee](https://ko-fi.com/3choff) ☕ to keep me motivated to work on this project.
 
 ## Features
 
