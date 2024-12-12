@@ -1,5 +1,16 @@
 # Change Log
 
+## [1.6.0] - 2024-11-30
+
+### Changed
+- Updated Puppeteer navigation strategy to use `networkidle0` for more reliable page loading.
+- Improved browser-method link handling to ensure navigation menu links are included in crawling while keeping content clean.
+- Enhanced URL processing to convert relative links to absolute URLs in browser-based crawling.
+
+### Fixed
+- Resolved issue where some pages were not fully parsed due to insufficient waiting conditions.
+- Corrected link processing to ensure all links are properly formatted and included in the crawl.
+
 ## [1.5.1] - 2024-11-29
 
 ### Fixed

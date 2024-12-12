@@ -371,10 +371,26 @@ export class CrawlerService implements ICrawlerService {
             const page = await browser.newPage();
             await page.setUserAgent(this.USER_AGENT);
             
-            await page.goto(url, { waitUntil: 'networkidle2', timeout: 10000 });
+            await page.goto(url, { waitUntil: 'networkidle0', timeout: 10000 });
             
-            // Get the page content after JavaScript execution
-            const content = await page.evaluate(() => {
+
+            
+            // First, get all links before cleaning up the content
+            const links = await page.evaluate((baseUrl) => {
+                const allLinks = Array.from(document.querySelectorAll('a'))
+                    .map(link => {
+                        const href = link.getAttribute('href');
+                        if (href && href.startsWith('/')) {
+                            return new URL(href, baseUrl).href;
+                        }
+                        return href;
+                    })
+                    .filter((href): href is string => href !== null); 
+                return allLinks;
+            }, url);
+
+            // Then get the cleaned content for markdown output
+            const content = await page.evaluate((baseUrl) => {
                 // Remove navigation elements
                 const navElements = document.querySelectorAll('nav, header, footer, [role="navigation"], .navigation, .nav, .navbar, .menu, .footer');
                 navElements.forEach(nav => nav.remove());
@@ -401,11 +417,23 @@ export class CrawlerService implements ICrawlerService {
                 while (styles.length > 0) {
                     styles[0].parentNode?.removeChild(styles[0]);
                 }
+
+                // Convert all relative URLs to absolute before returning the HTML
+                const links = document.querySelectorAll('a');
+                links.forEach(link => {
+                    const href = link.getAttribute('href');
+                    if (href && href.startsWith('/')) {
+                        link.href = new URL(href, baseUrl).href;
+                    }
+                });
                 
                 // Get the cleaned HTML content
                 return document.documentElement.outerHTML;
-            });
+            }, url);
             
+            // Store the links for later use in getLinks
+            this.pageLinks.set(url, links);
+
             return await this.contentProcessor.processContent(url, content);
         } catch (error) {
             throw new Error(`Failed to get content with Puppeteer from ${url}: ${error instanceof Error ? error.message : String(error)}`);
@@ -413,33 +441,42 @@ export class CrawlerService implements ICrawlerService {
             await browser.close();
         }
     }
+    private pageLinks: Map<string, string[]> = new Map();
 
     private async getLinks(url: string, baseUrlObj: URL, basePathParts: string[], maxDepth: number): Promise<string[]> {
         try {
-            const response = await axios.get(url, { 
-                timeout: 30000,
-                headers: { 'User-Agent': this.USER_AGENT }
-            });
+            let links: string[];
+            if (this.pageLinks.has(url)) {
+                links = this.pageLinks.get(url)!;
+            } else {
+                const response = await axios.get(url, { 
+                    timeout: 30000,
+                    headers: { 'User-Agent': this.USER_AGENT }
+                });
             
-            const links: string[] = [];
-            const hrefRegex = /href=["']([^"']+)["']/g;
-            let match;
-            
-            while ((match = hrefRegex.exec(response.data)) !== null) {
-                try {
-                    const href = match[1];
-                    if (this.isValidLink(href)) {
-                        const fullUrl = new URL(href, url).href;
-                        if (fullUrl.startsWith('http') && this.isWithinDocs(fullUrl, baseUrlObj, basePathParts, maxDepth)) {
-                            links.push(fullUrl);
+                links = [];
+                const hrefRegex = /href=["']([^"']+)["']/g;
+                let match;
+                
+                while ((match = hrefRegex.exec(response.data)) !== null) {
+                    try {
+                        const href = match[1];
+                        if (this.isValidLink(href)) {
+                            const fullUrl = new URL(href, url).href;
+                            if (fullUrl.startsWith('http') && this.isWithinDocs(fullUrl, baseUrlObj, basePathParts, maxDepth)) {
+                                links.push(fullUrl);
+                            }
                         }
+                    } catch (e) {
+                        console.error('Invalid URL:', e);
                     }
-                } catch (e) {
-                    console.error('Invalid URL:', e);
                 }
             }
             
-            return [...new Set(links)];
+            return [...new Set(links)].filter(link => 
+                link.startsWith('http') && 
+                this.isWithinDocs(link, baseUrlObj, basePathParts, maxDepth)
+            );
         } catch (error) {
             console.error(`Error fetching links from ${url}:`, error);
             return [];
