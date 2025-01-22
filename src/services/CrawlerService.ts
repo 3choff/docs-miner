@@ -5,6 +5,9 @@ import PCR from 'puppeteer-chromium-resolver';
 import { ICrawlerService, CrawlOptions, GithubInfo } from '../types';
 import { ContentProcessor } from './ContentProcessor';
 import { FileService } from './FileService';
+import * as cheerio from 'cheerio';
+import TurndownService from 'turndown';
+import { Browser } from 'puppeteer-core';
 
 export class CrawlerService implements ICrawlerService {
     private stopCrawling: boolean = false;
@@ -217,15 +220,12 @@ export class CrawlerService implements ICrawlerService {
     }
 
     private async crawlWebsite(options: CrawlOptions, webview: vscode.Webview, startTime: Date): Promise<void> {
-        const initialHeader = [
-            `# Source: ${options.url}`,
-        ].join('\n');
+        const initialHeader = [`# Source: ${options.url}`].join('\n');
         await this.fileService.saveContent(initialHeader, true);
         const visited = new Set<string>();
         const toVisit = [{ url: options.url, depth: 0 }];
         const plannedVisits = new Set([options.url]);
         let currentPage = 0;
-        let totalPages = 1;
 
         const baseUrlObj = new URL(options.url);
         const basePathParts = baseUrlObj.pathname.split('/').filter(Boolean);
@@ -235,63 +235,147 @@ export class CrawlerService implements ICrawlerService {
             message: `Starting crawl from ${options.url} with depth ${options.depth}`
         });
 
-        while (toVisit.length > 0 && !this.stopCrawling) {
-            const current = toVisit.shift()!;
-            if (visited.has(current.url) || current.depth >= options.depth) {
-                continue;
-            }
-
-            currentPage++;
-            visited.add(current.url);
-
-            webview.postMessage({
-                type: 'status',
-                message: `[${currentPage}/${plannedVisits.size}] ${current.url}\nDepth: ${current.depth + 1}/${options.depth}`
-            });
-
-            try {
-                const pageContent = await this.getPageContent(current.url, options.method);
-                
-                const formattedContent = [
-                    `\n\n## URL: ${current.url}`,
-                    '',
-                    pageContent,
-                    '---\n'
-                ].join('\n');
-
-                await this.fileService.saveContent(formattedContent, true);
-
-                if (current.depth < options.depth - 1) {
-                    webview.postMessage({
-                        type: 'status',
-                        message: `Finding links in ${current.url}...`
+        if (options.method === 'api') {
+            while (toVisit.length > 0 && !this.stopCrawling) {
+                const current = toVisit.shift()!;
+                if (visited.has(current.url) || current.depth >= options.depth) {
+                    continue;
+                }
+        
+                currentPage++;
+                visited.add(current.url);
+        
+                webview.postMessage({
+                    type: 'status',
+                    message: `[${currentPage}/${plannedVisits.size}] ${current.url}\nDepth: ${current.depth + 1}/${options.depth}`
+                });
+        
+                try {
+                    const response = await axios.get(`https://r.jina.ai/${current.url}`, {
+                        timeout: 30000,
+                        headers: { 'Accept': 'text/markdown' }
                     });
-
-                    const links = await this.getLinks(current.url, baseUrlObj, basePathParts, options.depth);
-                    let newLinks = 0;
-
-                    for (const link of links) {
-                        if (!visited.has(link) && !plannedVisits.has(link)) {
-                            toVisit.push({url: link, depth: current.depth + 1});
-                            plannedVisits.add(link);
-                            newLinks++;
-                            totalPages++;
+                    const formattedContent = [
+                        `\n\n## URL: ${current.url}`,
+                        '',
+                        response.data,
+                        '---\n'
+                    ].join('\n');
+                    await this.fileService.saveContent(formattedContent, true);
+        
+                    if (current.depth < options.depth - 1) {
+                        const regex = /\[.*?\]\((.*?)\)/g;
+                        const links: string[] = [];
+                        let match;
+                        
+                        while ((match = regex.exec(response.data)) !== null) {
+                            try {
+                                const href = match[1];
+                                if (this.isValidLink(href)) {
+                                    const fullUrl = new URL(href, current.url).href;
+                                    if (fullUrl.startsWith('http') && this.isWithinDocs(fullUrl, baseUrlObj, basePathParts, options.depth)) {
+                                        links.push(fullUrl);
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('Invalid URL:', e);
+                            }
                         }
+        
+                        let newLinks = 0;
+                        for (const link of links) {
+                            if (!visited.has(link) && !plannedVisits.has(link)) {
+                                toVisit.push({ url: link, depth: current.depth + 1 });
+                                plannedVisits.add(link);
+                                newLinks++;
+                            }
+                        }
+        
+                        webview.postMessage({
+                            type: 'status',
+                            message: `Found ${newLinks} new links in ${current.url}`
+                        });
+                    }
+        
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                } catch (error) {
+                    this.handleError(error, webview);
+                }
+            }
+        } else if (options.method === 'browser') {
+            // Browser method
+            const browser = await this.launchBrowser();
+            const page = await browser.newPage();
+
+            while (toVisit.length > 0 && !this.stopCrawling) {
+                const current = toVisit.shift()!;
+                if (visited.has(current.url) || current.depth >= options.depth) {
+                    continue;
+                }
+
+                currentPage++;
+                visited.add(current.url);
+
+                webview.postMessage({
+                    type: 'status',
+                    message: `[${currentPage}/${plannedVisits.size}] ${current.url}\nDepth: ${current.depth + 1}/${options.depth}`
+                });
+
+                try {
+                    await page.goto(current.url, {
+                        timeout: 10000,
+                        waitUntil: ['domcontentloaded', 'networkidle2'],
+                    });
+                    const content = await page.content();
+
+                    // Use Cheerio to parse and clean up the HTML
+                    const $ = cheerio.load(content);
+                    $("script, style, nav, footer, header").remove(); // Remove unnecessary elements
+
+                    // Convert cleaned HTML to markdown
+                    const turndownService = new TurndownService();
+                    const markdown = turndownService.turndown($.html());
+
+                    const formattedContent = [
+                        `\n\n## URL: ${current.url}`,
+                        '',
+                        markdown, // Save the markdown content
+                        '---\n'
+                    ].join('\n');
+
+                    await this.fileService.saveContent(formattedContent, true);
+
+                    if (current.depth < options.depth - 1) {
+                        webview.postMessage({
+                            type: 'status',
+                            message: `Finding links in ${current.url}...`
+                        });
+
+                        const links = await this.getLinks(current.url, baseUrlObj, basePathParts, options.depth);
+                        let newLinks = 0;
+
+                        for (const link of links) {
+                            if (!visited.has(link) && !plannedVisits.has(link)) {
+                                toVisit.push({ url: link, depth: current.depth + 1 });
+                                plannedVisits.add(link);
+                                newLinks++;
+                            }
+                        }
+
+                        webview.postMessage({
+                            type: 'status',
+                            message: `Found ${newLinks} new links in ${current.url}`
+                        });
                     }
 
-                    webview.postMessage({
-                        type: 'status',
-                        message: `Found ${newLinks} new links in ${current.url}`
-                    });
-                }
-
-                // Add a small delay between requests to avoid overwhelming the server
-                if (options.method === 'api') {
+                    // Add a small delay between requests to avoid overwhelming the server
                     await new Promise(resolve => setTimeout(resolve, 500));
+                } catch (error) {
+                    this.handleError(error, webview);
                 }
-            } catch (error) {
-                this.handleError(error, webview);
             }
+
+            await browser.close(); // Close the browser after crawling
         }
 
         const finalMessage = this.stopCrawling ? 
@@ -311,6 +395,17 @@ export class CrawlerService implements ICrawlerService {
             options.method,
             webview
         );
+    }
+
+    private async launchBrowser(): Promise<Browser> {
+        const stats = await PCR();
+        return await stats.puppeteer.launch({
+            headless: true,
+            args: [
+                "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            ],
+            executablePath: stats.executablePath,
+        });
     }
 
     private async saveWebsiteStats(
@@ -360,87 +455,121 @@ export class CrawlerService implements ICrawlerService {
         }
     }
 
-    private async getContentWithPuppeteer(url: string): Promise<string> {
+    private async getContentWithPuppeteer(url: string, retryCount = 0, maxRetries = 3): Promise<string> {
         const stats = await PCR();
         const browser = await stats.puppeteer.launch({
-            headless: 'new',
-            executablePath: stats.executablePath
+            headless: true,
+            args: [
+                "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                "--disable-web-security",
+                "--no-sandbox",
+                "--disable-setuid-sandbox"
+            ],
+            executablePath: stats.executablePath,
         });
-
+    
         try {
             const page = await browser.newPage();
-            await page.setUserAgent(this.USER_AGENT);
             
-            await page.goto(url, { waitUntil: 'networkidle0', timeout: 10000 });
+            // Rotate between different user agents
+            const userAgents = [
+                // Chrome on different platforms
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                
+                // Firefox on different platforms
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0',
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0',
+                
+                // Safari
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+                
+                // Edge
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+                
+                // Opera
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OPR/106.0.0.0'
+            ];
+            await page.setUserAgent(userAgents[Math.floor(Math.random() * userAgents.length)]);
             
+            await page.setExtraHTTPHeaders({
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Cache-Control': 'no-cache'
+            });
+    
+            // Exponential backoff delay
+            const delay = Math.min(Math.pow(2, retryCount) * 3000 + Math.random() * 1000, 15000);
+            await new Promise(resolve => setTimeout(resolve, delay));
 
-            
-            // First, get all links before cleaning up the content
-            const links = await page.evaluate((baseUrl) => {
-                const allLinks = Array.from(document.querySelectorAll('a'))
-                    .map(link => {
-                        const href = link.getAttribute('href');
-                        if (href && href.startsWith('/')) {
-                            return new URL(href, baseUrl).href;
+            // Enable JavaScript
+            await page.setJavaScriptEnabled(true);
+
+            // Set viewport like a real desktop browser
+            await page.setViewport({
+                width: 1920,
+                height: 1080,
+                deviceScaleFactor: 1,
+            });
+
+            // Add common browser permissions
+            const context = browser.defaultBrowserContext();
+            await context.overridePermissions(url, [
+                'geolocation',
+                'notifications',
+                'camera',
+                'microphone'
+            ]);
+
+            // Set common browser features
+            await page.evaluateOnNewDocument(() => {
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => false,
+                });
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['en-US', 'en'],
+                });
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [
+                        {
+                            name: 'Chrome PDF Plugin',
+                            description: 'Portable Document Format',
+                            filename: 'internal-pdf-viewer'
                         }
-                        return href;
-                    })
-                    .filter((href): href is string => href !== null); 
-                return allLinks;
-            }, url);
-
-            // Then get the cleaned content for markdown output
-            const content = await page.evaluate((baseUrl) => {
-                // Remove navigation elements
-                const navElements = document.querySelectorAll('nav, header, footer, [role="navigation"], .navigation, .nav, .navbar, .menu, .footer');
-                navElements.forEach(nav => nav.remove());
-
-                // Remove SVG elements and images with SVG sources
-                const svgElements = document.querySelectorAll('svg, img[src*=".svg"], img[src^="data:image/svg"]');
-                svgElements.forEach(svg => {
-                    const altText = svg.getAttribute('alt') || svg.getAttribute('title');
-                    if (altText) {
-                        svg.replaceWith(document.createTextNode(altText));
-                    } else {
-                        svg.remove();
-                    }
+                    ],
                 });
-
-                // Remove script tags and their content
-                const scripts = document.getElementsByTagName('script');
-                while (scripts.length > 0) {
-                    scripts[0].parentNode?.removeChild(scripts[0]);
-                }
-                
-                // Remove style tags and their content
-                const styles = document.getElementsByTagName('style');
-                while (styles.length > 0) {
-                    styles[0].parentNode?.removeChild(styles[0]);
-                }
-
-                // Convert all relative URLs to absolute before returning the HTML
-                const links = document.querySelectorAll('a');
-                links.forEach(link => {
-                    const href = link.getAttribute('href');
-                    if (href && href.startsWith('/')) {
-                        link.href = new URL(href, baseUrl).href;
-                    }
-                });
-                
-                // Get the cleaned HTML content
-                return document.documentElement.outerHTML;
-            }, url);
+            });
             
-            // Store the links for later use in getLinks
-            this.pageLinks.set(url, links);
-
-            return await this.contentProcessor.processContent(url, content);
+            await page.goto(url, {
+                timeout: 30000,
+                waitUntil: ['domcontentloaded', 'networkidle2'],
+            });
+    
+            // Wait for specific content to be loaded
+            await page.waitForFunction(() => {
+                return document.body.innerText.length > 100 && 
+                       !document.body.innerText.includes('Just a moment...') &&
+                       !document.body.innerText.includes('Waiting for');
+            }, { timeout: 30000 });
+    
+            const content = await page.content();
+            const $ = cheerio.load(content);
+            $("script, style, nav, footer, header").remove();
+    
+            const turndownService = new TurndownService();
+            return turndownService.turndown($.html());
         } catch (error) {
-            throw new Error(`Failed to get content with Puppeteer from ${url}: ${error instanceof Error ? error.message : String(error)}`);
+            if (retryCount < maxRetries) {
+                return this.getContentWithPuppeteer(url, retryCount + 1, maxRetries);
+            }
+            throw error;
         } finally {
             await browser.close();
         }
     }
+    
+    
     private pageLinks: Map<string, string[]> = new Map();
 
     private async getLinks(url: string, baseUrlObj: URL, basePathParts: string[], maxDepth: number): Promise<string[]> {

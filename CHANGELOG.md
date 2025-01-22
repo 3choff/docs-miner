@@ -1,6 +1,19 @@
 # Change Log
 
-## [1.6.0] - 2024-11-30
+## [1.7.0] - 2025-01-22
+
+### Changed
+- Implemented exponential backoff with retries in the browser method to avoid being blocked by anti-detection measures.
+- Added random user agent rotation from a list of common user agents.
+- Added `Accept-Language`, `Accept`, and `Cache-Control` headers to the browser method.
+- Added a delay with exponential backoff before navigating to the page.
+- Enabled JavaScript in the browser method.
+- Set viewport to a common desktop resolution in the browser method.
+- Added common browser permissions to the browser method.
+- Added common browser features to avoid detection.
+- Added a wait for specific content to be loaded in the browser method.
+
+## [1.6.0] - 2024-12-12
 
 ### Changed
 - Updated Puppeteer navigation strategy to use `networkidle0` for more reliable page loading.
