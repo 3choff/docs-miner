@@ -1,5 +1,16 @@
 # Change Log
 
+## [1.7.1] - 2024-01-28
+
+### Changed
+- Improved GitHub repository crawling with automatic branch detection
+- Enhanced error handling and user feedback for failed crawls
+- Added detailed branch information logging during GitHub repository crawling
+
+### Fixed
+- Fixed button state not resetting after crawling errors
+- Fixed incorrect branch detection in GitHub repository crawling
+
 ## [1.7.0] - 2025-01-22
 
 ### Changed

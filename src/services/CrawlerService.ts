@@ -71,7 +71,18 @@ export class CrawlerService implements ICrawlerService {
 
     private async crawlGithubRepo(options: CrawlOptions, webview: vscode.Webview, startTime: Date): Promise<void> {
         try {
-            const githubInfo = this.parseGithubUrl(options.url);
+            let githubInfo = this.parseGithubUrl(options.url);
+            
+            // Get repository contents and update branch if needed
+            const files = await this.getRepoContents(githubInfo.owner, githubInfo.repo, githubInfo.branch);
+            // Update githubInfo with the actual branch being used
+            if (files.actualBranch) {
+                githubInfo = {
+                    ...githubInfo,
+                    branch: files.actualBranch
+                };
+            }
+
             const initialHeader = [
                 `# Repository: ${githubInfo.owner}/${githubInfo.repo}`,
                 `## Branch: ${githubInfo.branch}`,
@@ -82,8 +93,7 @@ export class CrawlerService implements ICrawlerService {
                 message: `Starting GitHub repository crawl: \n${githubInfo.owner}/${githubInfo.repo}`
             });
 
-            const files = await this.getRepoContents(githubInfo.owner, githubInfo.repo, githubInfo.branch);
-            const filteredFiles = this.filterFiles(files, githubInfo, options.depth);
+            const filteredFiles = this.filterFiles(files.tree, githubInfo, options.depth);
 
             webview.postMessage({
                 type: 'status',
@@ -103,7 +113,51 @@ export class CrawlerService implements ICrawlerService {
 
             await this.saveGithubStats(options.url, githubInfo, options.depth, filteredFiles.length, startTime, webview);
         } catch (error) {
-            this.handleError(error, webview);
+            // Enhanced error handling
+            let errorMessage = 'An unknown error occurred';
+            if (axios.isAxiosError(error)) {
+                if (error.response?.status === 404) {
+                    errorMessage = `Repository not found: ${options.url}`;
+                } else if (error.response?.status === 403) {
+                    errorMessage = 'Rate limit exceeded or access denied';
+                } else if (error.response?.data?.message) {
+                    errorMessage = `GitHub API Error: ${error.response.data.message}`;
+                } else {
+                    errorMessage = `Network error: ${error.message}`;
+                }
+            } else if (error instanceof Error) {
+                errorMessage = error.message;
+            }
+
+            console.error('Crawling failed:', errorMessage);
+            
+            // Send error status to webview
+            webview.postMessage({
+                type: 'status',
+                message: `Error: ${errorMessage}`,
+                isError: true
+            });
+
+            // Reset crawling state in webview
+            webview.postMessage({
+                type: 'crawlingComplete',
+                success: false
+            });
+
+            // Save error information to the output file
+            const errorContent = [
+                '\n\n# Crawling Error',
+                '',
+                `Error occurred while crawling ${options.url}`,
+                '',
+                `**Error:** ${errorMessage}`,
+                '',
+                `**Time:** ${new Date().toLocaleString()}`,
+                '',
+                '---\n'
+            ].join('\n');
+
+            await this.fileService.saveContent(errorContent, true);
         }
     }
 
@@ -119,11 +173,54 @@ export class CrawlerService implements ICrawlerService {
             isSpecificPath: pathParts.length > 4
         };
     }
-
-    private async getRepoContents(owner: string, repo: string, branch: string): Promise<any[]> {
-        const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
-        const response = await axios.get(treeUrl);
-        return response.data.tree;
+    
+    // private async getRepoContents(owner: string, repo: string, branch: string): Promise<any> {
+    //     const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
+    //     const response = await axios.get(treeUrl);
+    //     return {
+    //         tree: response.data.tree,
+    //         actualBranch: branch  // Add this to match the expected return type
+    //     };
+    // }
+    private async getRepoContents(owner: string, repo: string, branch: string): Promise<any> {
+        try {
+            console.log('Fetching repository info and available branches...');
+            const repoUrl = `https://api.github.com/repos/${owner}/${repo}`;
+            const repoResponse = await axios.get(repoUrl);
+            
+            if (repoResponse.data.default_branch) {
+                const defaultBranch = repoResponse.data.default_branch;
+                console.log('Available branches:');
+                
+                // Fetch and log all branches
+                const branchesUrl = `https://api.github.com/repos/${owner}/${repo}/branches`;
+                const branchesResponse = await axios.get(branchesUrl);
+                branchesResponse.data.forEach((branch: any) => {
+                    console.log(`- ${branch.name}${branch.name === defaultBranch ? ' (default)' : ''}`);
+                });
+                
+                console.log(`\nUsing default branch: ${defaultBranch}`);
+                const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`;
+                const defaultBranchResponse = await axios.get(treeUrl);
+                
+                return {
+                    tree: defaultBranchResponse.data.tree,
+                    actualBranch: defaultBranch
+                };
+            } else {
+                throw new Error('No default branch found in repository');
+            }
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                console.error('GitHub API Error Details:');
+                console.error('- Status:', error.response?.status);
+                console.error('- Status Text:', error.response?.statusText);
+                console.error('- Response Data:', error.response?.data);
+                console.error('- Request URL:', error.config?.url);
+                console.error('- Request Method:', error.config?.method);
+            }
+            throw error;
+        }
     }
 
     private filterFiles(files: any[], githubInfo: GithubInfo, depth: number): any[] {

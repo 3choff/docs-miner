@@ -105,7 +105,7 @@ window.addEventListener('message', event => {
     switch (type) {
         case 'status':
             updateStatus(message, isError);
-            if (message.includes('Completed!') || message.includes('stopped by user')) {
+            if (isError || message.includes('Completed!') || message.includes('stopped by user')) {
                 toggleCrawlButtons(false);
             }
             break;
@@ -114,7 +114,6 @@ window.addEventListener('message', event => {
                 vscode.postMessage({ type: 'openFile' });
             }
             break;
-
         case 'fileSelected':
             if (filePath) {
                 const workspacePath = event.data.workspacePath;
