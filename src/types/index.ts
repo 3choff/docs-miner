@@ -6,6 +6,7 @@ export interface CrawlOptions {
     method: 'api' | 'browser';
     outputFolder?: string;
     outputFileName?: string;
+    branch?: string; 
 }
 
 export interface CrawlStats {
@@ -22,6 +23,7 @@ export interface GithubInfo {
     branch: string;
     basePath: string;
     isSpecificPath: boolean;
+    branchSpecifiedInUrl: boolean;
 }
 
 export interface ICrawlerService {

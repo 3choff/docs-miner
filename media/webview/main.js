@@ -12,6 +12,8 @@ const ELEMENTS = {
     crawlerMethod: document.getElementById('crawlerMethod'),
     outputFileName: document.getElementById('outputFileName'),
     selectFileButton: document.getElementById('selectFileButton'),
+    branchSelect: document.getElementById('branchSelect'),
+    branchSelection: document.getElementById('branchSelection'),
 };
 
 const DEPTH_DESCRIPTIONS = {
@@ -49,7 +51,8 @@ function validateUrl(url) {
 function isGithubUrl(url) {
     try {
         const urlObj = new URL(url);
-        return urlObj.hostname === 'github.com';
+        const isGithub = urlObj.hostname === 'github.com';
+        return isGithub;
     } catch {
         return false;
     }
@@ -61,6 +64,15 @@ function updateMethodDropdown(url) {
     ELEMENTS.crawlerMethod.closest('.crawler-method').classList.toggle('github-mode', isGithub);
 }
 
+function updateMethodVisibility(url) {
+    const isGithub = isGithubUrl(url);
+    const githubControls = document.getElementById('githubControls');
+    const websiteControls = document.getElementById('websiteControls');
+    
+    githubControls.style.display = isGithub ? 'block' : 'none';
+    websiteControls.style.display = isGithub ? 'none' : 'block';
+}
+
 ELEMENTS.depthSlider.addEventListener('input', (e) => {
     const depth = parseInt(e.target.value);
     ELEMENTS.depthValue.textContent = depth;
@@ -69,8 +81,22 @@ ELEMENTS.depthSlider.addEventListener('input', (e) => {
 
 ELEMENTS.urlInput.addEventListener('input', (e) => {
     const url = e.target.value.trim();
+    
     if (url) {
-        updateMethodDropdown(url);
+        updateMethodVisibility(url);
+        // Clear existing branches when URL changes
+        ELEMENTS.branchSelect.innerHTML = '';
+        ELEMENTS.branchSelection.style.display = 'none';
+        
+        if (isGithubUrl(url)) {
+            vscode.postMessage({
+                type: 'getGithubBranches',
+                url: url
+            });
+        }
+    } else {
+        // Show website controls by default when input is empty
+        updateMethodVisibility('');
     }
 });
 
@@ -87,7 +113,8 @@ ELEMENTS.startButton.addEventListener('click', () => {
         depth: parseInt(ELEMENTS.depthSlider.value),
         outputFolder: ELEMENTS.outputFolder.value.trim(),
         outputFileName: ELEMENTS.outputFileName.value.trim(),
-        method: ELEMENTS.crawlerMethod.value
+        method: ELEMENTS.crawlerMethod.value,
+        branch: ELEMENTS.branchSelect.value
     });
 });
 
@@ -100,7 +127,7 @@ ELEMENTS.selectFileButton.addEventListener('click', () => {
 });
 
 window.addEventListener('message', event => {
-    const { type, message, isError, filePath } = event.data;
+    const { type, message, isError, filePath, branches, defaultBranch } = event.data;
     
     switch (type) {
         case 'status':
@@ -132,5 +159,27 @@ window.addEventListener('message', event => {
                 ELEMENTS.outputFolder.value = folderPath;
             }
             break;
+        case 'populateBranches':
+            populateBranchSelect(branches, defaultBranch);
+            break;
     }
 });
+
+function populateBranchSelect(branches, defaultBranch, branchSpecifiedInUrl = false) {
+    
+    // Clear existing options
+    ELEMENTS.branchSelect.innerHTML = '';
+    
+    // Add branches to select
+    branches.forEach(branch => {
+        const option = document.createElement('option');
+        option.value = branch;
+        option.text = branch + (branch === defaultBranch ? ' (default)' : '');
+        option.selected = branch === defaultBranch;
+        ELEMENTS.branchSelect.appendChild(option);
+    });
+    
+    // Only show selector if multiple branches exist and branch not specified in URL
+    const shouldShow = !branchSpecifiedInUrl && branches.length > 1;
+    ELEMENTS.branchSelection.style.display = shouldShow ? 'block' : 'none';
+}

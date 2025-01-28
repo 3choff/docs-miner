@@ -286,3 +286,37 @@ input[type="checkbox"]:checked::after {
 .feedback a:hover {
     text-decoration: underline;
 }
+
+#branchSelection {
+    margin: 10px 0;
+}
+
+#branchSelect {
+    width: 100%;
+    padding: 8px;
+    margin: 0 0 10px 0;
+    border-radius: 6px;
+    border: 1px solid var(--input-border);
+    background: var(--input-background);
+    color: var(--text-color);
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+#branchSelect:focus {
+    border-color: var(--input-focus-border);
+}
+
+.branch-info {
+    font-size: 0.9em;
+    color: var(--vscode-descriptionForeground);
+    margin-top: 4px;
+    font-style: italic;
+}
+.version {
+    text-align: center;
+    color: var(--vscode-descriptionForeground);
+    font-size: 0.8em;
+    margin-top: 10px;
+    opacity: 0.7;
+}

@@ -69,12 +69,31 @@ export class CrawlerService implements ICrawlerService {
         }
     }
 
+    private parseGithubUrl(url: string): GithubInfo {
+        const urlParts = new URL(url);
+        const pathParts = urlParts.pathname.split('/').filter(Boolean);
+        
+        // Check if URL contains a specific branch path
+        const treeIndex = pathParts.indexOf('tree');
+        const hasBranchInUrl = treeIndex !== -1 && pathParts.length > treeIndex + 1;
+        
+        return {
+            owner: pathParts[0],
+            repo: pathParts[1],
+            type: hasBranchInUrl ? pathParts[treeIndex] : 'tree',
+            branch: hasBranchInUrl ? pathParts[treeIndex + 1] : 'main',
+            basePath: hasBranchInUrl ? pathParts.slice(treeIndex + 2).join('/') : '',
+            isSpecificPath: hasBranchInUrl && pathParts.length > treeIndex + 2,
+            branchSpecifiedInUrl: hasBranchInUrl
+        };
+    }
+
     private async crawlGithubRepo(options: CrawlOptions, webview: vscode.Webview, startTime: Date): Promise<void> {
         try {
             let githubInfo = this.parseGithubUrl(options.url);
             
             // Get repository contents and update branch if needed
-            const files = await this.getRepoContents(githubInfo.owner, githubInfo.repo, githubInfo.branch);
+            const files = await this.getRepoContents(githubInfo.owner, githubInfo.repo, options.branch || githubInfo.branch);
             // Update githubInfo with the actual branch being used
             if (files.actualBranch) {
                 githubInfo = {
@@ -161,55 +180,21 @@ export class CrawlerService implements ICrawlerService {
         }
     }
 
-    private parseGithubUrl(url: string): GithubInfo {
-        const urlParts = new URL(url);
-        const pathParts = urlParts.pathname.split('/').filter(Boolean);
-        return {
-            owner: pathParts[0],
-            repo: pathParts[1],
-            type: pathParts[2] || 'tree',
-            branch: pathParts[3] || 'main',
-            basePath: pathParts.slice(4).join('/'),
-            isSpecificPath: pathParts.length > 4
-        };
-    }
-    
-    // private async getRepoContents(owner: string, repo: string, branch: string): Promise<any> {
-    //     const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
-    //     const response = await axios.get(treeUrl);
-    //     return {
-    //         tree: response.data.tree,
-    //         actualBranch: branch  // Add this to match the expected return type
-    //     };
-    // }
     private async getRepoContents(owner: string, repo: string, branch: string): Promise<any> {
         try {
-            console.log('Fetching repository info and available branches...');
             const repoUrl = `https://api.github.com/repos/${owner}/${repo}`;
             const repoResponse = await axios.get(repoUrl);
             
-            if (repoResponse.data.default_branch) {
-                const defaultBranch = repoResponse.data.default_branch;
-                console.log('Available branches:');
-                
-                // Fetch and log all branches
-                const branchesUrl = `https://api.github.com/repos/${owner}/${repo}/branches`;
-                const branchesResponse = await axios.get(branchesUrl);
-                branchesResponse.data.forEach((branch: any) => {
-                    console.log(`- ${branch.name}${branch.name === defaultBranch ? ' (default)' : ''}`);
-                });
-                
-                console.log(`\nUsing default branch: ${defaultBranch}`);
-                const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`;
-                const defaultBranchResponse = await axios.get(treeUrl);
-                
-                return {
-                    tree: defaultBranchResponse.data.tree,
-                    actualBranch: defaultBranch
-                };
-            } else {
-                throw new Error('No default branch found in repository');
-            }
+            // Use provided branch if available, otherwise use default
+            const branchToUse = branch || repoResponse.data.default_branch;
+            
+            const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${branchToUse}?recursive=1`;
+            const branchResponse = await axios.get(treeUrl);
+            
+            return {
+                tree: branchResponse.data.tree,
+                actualBranch: branchToUse
+            };
         } catch (error) {
             if (axios.isAxiosError(error)) {
                 console.error('GitHub API Error Details:');
@@ -220,6 +205,33 @@ export class CrawlerService implements ICrawlerService {
                 console.error('- Request Method:', error.config?.method);
             }
             throw error;
+        }
+    }
+    
+    private async getAvailableBranches(owner: string, repo: string): Promise<{ branches: string[], defaultBranch: string }> {
+        try {
+            // Get repository info for default branch
+            const repoUrl = `https://api.github.com/repos/${owner}/${repo}`;
+            const repoResponse = await axios.get(repoUrl);
+            const defaultBranch = repoResponse.data.default_branch;
+
+            // Get all branches
+            const branchesUrl = `https://api.github.com/repos/${owner}/${repo}/branches`;
+            const branchesResponse = await axios.get(branchesUrl);
+            const branches = branchesResponse.data.map((branch: any) => branch.name);
+            
+
+            branches.forEach((branch: string) => {
+                console.log(`- ${branch}${branch === defaultBranch ? ' (default)' : ''}`);
+            });
+            
+            return {
+                branches,
+                defaultBranch
+            };
+        } catch (error) {
+            console.error('Error fetching branches:', error);
+            throw new Error('Failed to fetch repository branches');
         }
     }
 
@@ -788,5 +800,33 @@ export class CrawlerService implements ICrawlerService {
         });
         this.fileService.saveContent(`\n\n# Error processing ${filePath}\n\n${errorMessage}\n\n---\n`, true)
             .catch(console.error);
+    }
+
+    public async handleGithubUrl(url: string, webview: vscode.Webview) {
+        try {
+            const githubInfo = this.parseGithubUrl(url);
+            
+            // If branch is specified in URL, don't show selector
+            if (githubInfo.branchSpecifiedInUrl) {
+                webview.postMessage({
+                    type: 'populateBranches',
+                    branches: [githubInfo.branch],
+                    defaultBranch: githubInfo.branch,
+                    branchSpecifiedInUrl: true
+                });
+                return;
+            }
+            
+            // Otherwise, fetch available branches
+            const branchInfo = await this.getAvailableBranches(githubInfo.owner, githubInfo.repo);
+            
+            webview.postMessage({
+                type: 'populateBranches',
+                branches: branchInfo.branches,
+                defaultBranch: branchInfo.defaultBranch
+            });
+        } catch (error) {
+            console.error('Error handling GitHub URL:', error);
+        }
     }
 }

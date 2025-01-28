@@ -2,7 +2,7 @@
   "name": "docs-miner",
   "displayName": "Docs Miner",
   "description": "Generate markdown documentation from web pages and GitHub repositories",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "publisher": "3choff",
   "icon": "media/icon.png",
   "repository": {

@@ -14,7 +14,16 @@ export class ViewProvider implements vscode.WebviewViewProvider {
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
-    ) {}
+    ) {
+        // Initialize services in constructor
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders) {
+            const workspaceFolder = workspaceFolders[0].uri.fsPath;
+            this.fileService = new FileService(workspaceFolder);
+            const contentProcessor = new ContentProcessor();
+            this.crawlerService = new CrawlerService(contentProcessor, this.fileService);
+        }
+    }
 
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
@@ -51,7 +60,8 @@ export class ViewProvider implements vscode.WebviewViewProvider {
                         depth: data.depth,
                         method: data.method,
                         outputFolder: data.outputFolder,
-                        outputFileName: data.outputFileName
+                        outputFileName: data.outputFileName,
+                        branch: data.branch
                     };
 
                     try {
@@ -71,6 +81,27 @@ export class ViewProvider implements vscode.WebviewViewProvider {
                             type: 'status',
                             message: 'Stopping crawl... \nPlease wait for current page to finish.'
                         });
+                    }
+                    break;
+                }
+
+                case 'getGithubBranches': {
+                    if (!this.crawlerService) {
+                        // Initialize services if not already done
+                        const workspaceFolders = vscode.workspace.workspaceFolders;
+                        if (workspaceFolders) {
+                            const workspaceFolder = workspaceFolders[0].uri.fsPath;
+                            this.fileService = new FileService(workspaceFolder);
+                            const contentProcessor = new ContentProcessor();
+                            this.crawlerService = new CrawlerService(contentProcessor, this.fileService);
+                        }
+                    }
+                    
+                    if (this.crawlerService) {
+                        console.log('Requesting branches for URL:', data.url);
+                        await this.crawlerService.handleGithubUrl(data.url, webviewView.webview);
+                    } else {
+                        console.error('CrawlerService not initialized');
                     }
                     break;
                 }
@@ -123,10 +154,15 @@ export class ViewProvider implements vscode.WebviewViewProvider {
         const indexPath = vscode.Uri.joinPath(this._extensionUri, 'media', 'webview', 'index.html');
         let htmlContent = fs.readFileSync(indexPath.fsPath, 'utf-8');
         
-        // Replace placeholders with actual URIs
+        // Get version from package.json
+        const packageJsonPath = vscode.Uri.joinPath(this._extensionUri, 'package.json');
+        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath.fsPath, 'utf-8'));
+        
+        // Replace placeholders with actual URIs and version
         htmlContent = htmlContent
             .replace('${scriptUri}', scriptUri.toString())
-            .replace('${styleUri}', styleUri.toString());
+            .replace('${styleUri}', styleUri.toString())
+            .replace('${version}', packageJson.version);
             
         return htmlContent;
     }

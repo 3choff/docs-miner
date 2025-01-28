@@ -1,5 +1,21 @@
 # Change Log
 
+## [1.8.0] - 2024-01-29
+
+### Added
+- Branch selection for GitHub repositories
+- Version number display in UI
+- Dynamic UI controls based on URL type (GitHub vs regular websites)
+
+### Changed
+- Improved GitHub repository detection and branch handling
+- Enhanced UI feedback for GitHub repository crawling
+- Better error handling for branch fetching
+
+### Fixed
+- Fixed branch selection persistence between different repositories
+- Fixed UI state management for crawling method selection
+
 ## [1.7.1] - 2024-01-28
 
 ### Changed

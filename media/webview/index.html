@@ -9,13 +9,21 @@
     <div class="url-input">
         <input type="text" id="urlInput" placeholder="Enter a URL to scrape" />
     </div>
-    <div class="crawler-method">
-        <label for="crawlerMethod">Select a crawling method:</label>
-        <select id="crawlerMethod">
-            <option value="api">API (Faster but may fail on some sites)</option>
-            <option value="browser">Browser (Slower but more reliable)</option>
-        </select>
-        <div id="githubNotice" class="github-notice">GitHub repository detected. Using a specialized crawling method</div>
+    <div id="websiteControls">
+        <div class="crawler-method">
+            <label for="crawlerMethod">Select a crawling method:</label>
+            <select id="crawlerMethod">
+                <option value="api">API (Faster but may fail on some sites)</option>
+                <option value="browser">Browser (Slower but more reliable)</option>
+            </select>
+        </div>
+    </div>
+    <div id="githubControls" style="display: none;">
+        <div id="branchSelection" class="section-container">
+            <div class="section-label">Select a branch</div>
+            <select id="branchSelect" class="branch-select">
+            </select>
+        </div>
     </div>
     <div class="section-container">
         <div class="section-label">Set the depth of crawling</div>
@@ -49,6 +57,9 @@
     <div class="feedback">
         <div>Have feedback or found an issue?</div>
         <a href="https://github.com/3choff/docs-miner/issues" target="_blank">Let me know on GitHub</a>
+    </div>
+    <div class="version">
+        v${version}
     </div>
     <script src="${scriptUri}"></script>
 </body>
